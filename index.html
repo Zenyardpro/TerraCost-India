@@ -2137,6 +2137,9 @@ function newBOQ() {
   const qEl=document.getElementById('quoteRef');
   if(qEl) qEl.value='BOQ-'+now.getFullYear().toString().slice(2)+String(now.getMonth()+1).padStart(2,'0')+String(now.getDate()).padStart(2,'0')+'-'+Math.floor(100+Math.random()*900);
   document.getElementById('revision').value='1';
+  // Reset cloud project tracking so next Save creates a new row
+  _currentProjectId = null;
+  try { localStorage.removeItem('boq_current_project_id'); } catch(e) {}
   renderZones(); updateTotals(); updateAccordionHints(); scheduleSave();
   // Offer template
   showTemplatePicker();
@@ -5594,30 +5597,24 @@ async function cloudSaveProject() {
   var name  = (state.meta && state.meta.projectName ? state.meta.projectName : '').trim() || 'Untitled BOQ';
 
   var sb = getSupabase();
-  // Check if project with this name already exists for user
-  var existCheck = await sb
-    .from('projects')
-    .select('id')
-    .eq('user_id', _supaUser.id)
-    .eq('name', name)
-    .limit(1);
 
-  var existing = existCheck.data;
-
-  if (existing && existing.length > 0) {
-    // Update existing
+  if (_currentProjectId) {
+    // UPDATE existing row by id
     var upd = await sb
       .from('projects')
-      .update({ data: state, updated_at: new Date().toISOString() })
-      .eq('id', existing[0].id);
+      .update({ name: name, data: state, updated_at: new Date().toISOString() })
+      .eq('id', _currentProjectId);
     if (upd.error) { alert('Save failed: ' + upd.error.message); return; }
     showCloudSaveToast('Project updated in cloud!');
   } else {
-    // Insert new
+    // INSERT new row, capture returned id
     var ins = await sb
       .from('projects')
-      .insert({ user_id: _supaUser.id, name: name, data: state });
+      .insert({ user_id: _supaUser.id, name: name, data: state })
+      .select('id')
+      .single();
     if (ins.error) { alert('Save failed: ' + ins.error.message); return; }
+    _currentProjectId = ins.data.id;
     showCloudSaveToast('Project saved to cloud!');
   }
 }
@@ -5696,6 +5693,7 @@ async function cloudLoadProject(id) {
   var s = res.data.data;
   if (!s || !s.zones) { alert('Invalid project data.'); return; }
   localStorage.setItem('boq_india_v1', JSON.stringify(s));
+  localStorage.setItem('boq_current_project_id', id);
   closeProjectsPanel();
   location.reload();
 }
@@ -5711,6 +5709,10 @@ async function cloudDeleteProject(id, name) {
 // --- Init auth on page load ---
 async function initSupaAuth() {
   try {
+    // Restore current project id if returning to a loaded project
+    var storedId = localStorage.getItem('boq_current_project_id');
+    if (storedId) { _currentProjectId = storedId; }
+
     var sb = getSupabase();
     var sessionRes = await sb.auth.getSession();
     if (sessionRes.data && sessionRes.data.session && sessionRes.data.session.user) {
