@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>TerraCost — by TerraOS</title>
+  <title>TerraCost — <a href="https://terraio.vercel.app" style="color:inherit;text-decoration:none;">by TerraOS</a></title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
@@ -1140,14 +1140,43 @@
     @media (max-width: 700px) {
       .auth-bar { padding: 8px 16px; }
     }
+  
+  /* ── TerraOS Ecosystem Strip ─────────────────────────────── */
+  .terra-eco-strip {
+    background: #1A3829; color: #79AE90;
+    font-family: 'DM Sans', system-ui, sans-serif;
+    font-size: 11px; font-weight: 500; letter-spacing: .5px;
+    text-align: center; padding: 6px 16px;
+    display: flex; align-items: center; justify-content: center;
+    flex-wrap: wrap; gap: 6px; position: relative; z-index: 100;
+  }
+  .terra-eco-strip a { color: #EAE6DF; text-decoration: none; transition: color .15s; }
+  .terra-eco-strip a:hover { color: #A87118; }
+  .terra-eco-strip a.eco-active { color: #A87118; font-weight: 700; }
+  .terra-eco-strip .eco-sep { opacity: .35; }
+  .terra-eco-strip .eco-soon { opacity: .45; cursor: default; }
+
   </style>
 </head>
 <body>
+<div class="terra-eco-strip">
+  <a href="https://terraio.vercel.app">TerraOS</a>
+  <span class="eco-sep">·</span>
+  <a href="https://terrascope-ten.vercel.app">TerraScope</a>
+  <span class="eco-sep">·</span>
+  <span class="eco-soon">TerraDesign <sup>soon</sup></span>
+  <span class="eco-sep">·</span>
+  <a href="https://terra-cost-landing.vercel.app" class="eco-active">TerraCost</a>
+  <span class="eco-sep">·</span>
+  <span class="eco-soon">TerraExec <sup>soon</sup></span>
+  <span class="eco-sep">|</span>
+  <a href="https://terracostgulf.vercel.app" style="color:#A87118;">🌍 Gulf Edition</a>
+</div>
 
 <div id="splashOverlay">
   <div class="splash-dot"></div>
   <div class="splash-brand">TerraCost</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.45);letter-spacing:1px;margin-top:-4px;">by TerraOS</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.45);letter-spacing:1px;margin-top:-4px;"><a href="https://terraio.vercel.app" style="color:inherit;text-decoration:none;">by TerraOS</a></div>
 </div>
 
 
@@ -3068,7 +3097,7 @@ function downloadPDF() {
     doc.setFontSize(8); doc.setTextColor(150);
     doc.text(`${meta.quoteRef||'BOQ'}  |  Rev ${meta.revision||1}  |  Page ${i} of ${totalPages}`, pw/2, ph-7, {align:'center'});
     doc.setFontSize(7); doc.setTextColor(180);
-    doc.text('Prepared using TerraCost — by TerraOS · terra-cost-india.vercel.app', pw/2, ph-3, {align:'center'});
+    doc.text('Prepared using TerraCost — <a href="https://terraio.vercel.app" style="color:inherit;text-decoration:none;">by TerraOS</a> · terra-cost-india.vercel.app', pw/2, ph-3, {align:'center'});
   }
 
   // ---- Dynamic filename ----
