@@ -1156,62 +1156,7 @@
   .terra-eco-strip .eco-sep { opacity: .35; }
   .terra-eco-strip .eco-soon { opacity: .45; cursor: default; }
 
-  
-  /* ── Upgrade Modal ───────────────────────────────────────── */
-  .upgrade-overlay {
-    display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);
-    z-index:9000;align-items:center;justify-content:center;padding:16px;
-  }
-  .upgrade-overlay.open { display:flex; }
-  .upgrade-box {
-    background:var(--cream);border-radius:12px;padding:32px;max-width:400px;
-    width:100%;font-family:'DM Sans',system-ui,sans-serif;box-shadow:var(--shadow-lg);
-  }
-  .upgrade-box h2 { margin:0 0 8px;color:var(--forest);font-size:18px; }
-  .upgrade-box .upgrade-reason { font-size:13px;color:var(--stone);margin-bottom:20px; }
-  .upgrade-features { list-style:none;padding:0;margin:0 0 24px;font-size:13px;color:var(--stone-dk); }
-  .upgrade-features li { padding:4px 0; }
-  .upgrade-features li::before { content:"✓ ";color:var(--forest);font-weight:700; }
-  .upgrade-plans { display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px; }
-  .plan-card {
-    border:2px solid var(--border);border-radius:8px;padding:14px 12px;
-    text-align:center;cursor:pointer;transition:border-color .15s;background:var(--white);
-  }
-  .plan-card:hover { border-color:var(--forest); }
-  .plan-card.featured { border-color:var(--forest);background:var(--green-pale); }
-  .plan-card .plan-name { font-weight:700;font-size:13px;color:var(--stone-dk); }
-  .plan-card .plan-price { font-size:20px;font-weight:700;color:var(--forest);margin:4px 0; }
-  .plan-card .plan-desc { font-size:11px;color:var(--stone-lt); }
-  .upgrade-close { background:none;border:none;color:var(--stone);font-size:12px;cursor:pointer;width:100%;text-align:center; }
-
-  /* ── Profile Panel ───────────────────────────────────────── */
-  .profile-overlay {
-    display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);
-    z-index:8500;align-items:center;justify-content:center;padding:16px;
-  }
-  .profile-overlay.open { display:flex; }
-  .profile-box {
-    background:var(--cream);border-radius:12px;padding:28px;max-width:440px;
-    width:100%;max-height:90vh;overflow-y:auto;font-family:'DM Sans',system-ui,sans-serif;
-    box-shadow:var(--shadow-lg);
-  }
-  .profile-box h2 { margin:0 0 4px;color:var(--forest);font-size:16px; }
-  .profile-tier-badge {
-    display:inline-block;padding:2px 10px;border-radius:20px;font-size:10px;
-    font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin-bottom:16px;
-  }
-  .profile-tier-badge.free { background:var(--sand);color:var(--stone); }
-  .profile-tier-badge.pro { background:var(--forest);color:var(--cream); }
-  .profile-field { margin-bottom:12px; }
-  .profile-field label { display:block;font-size:11px;font-weight:600;color:var(--stone);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px; }
-  .profile-field input { width:100%;box-sizing:border-box; }
-  .profile-save-btn { background:var(--forest);color:var(--cream);border:none;border-radius:6px;padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer;width:100%;margin-top:8px; }
-  .profile-save-btn:hover { background:var(--forest-mid); }
-  .profile-close { background:none;border:none;color:var(--stone);font-size:12px;cursor:pointer;width:100%;text-align:center;margin-top:8px; }
-
   </style>
-<script src="https://checkout.razorpay.com/v1/checkout.js" async></script>
-<script src="https://checkout.razorpay.com/v1/checkout.js" async></script>
 </head>
 <body>
 <div class="terra-eco-strip">
@@ -1523,51 +1468,7 @@
   var allowed = ['terra-cost-india.vercel.app', 'terracostgulf.netlify.app', 'terracostindia.netlify.app', 'terracost.netlify.app', 'terraos.netlify.app', 'localhost', '127.0.0.1', ''];
   if (!allowed.includes(host)) {
     // Immediately stop all rendering
-    document.documentElement.innerHTML = '<html><head><style>*{margin:0;padding:0;box-sizing:border-box;}html,body{width:100%;height:100%;background:#0D2B1E;overflow:hidden;}body{display:flex;align-items:center;justify-content:center;font-family:sans-serif;}</style></head><body><div style="text-align:center;color:#fff;padding:32px;max-width:400px;"><div style="font-size:30px;font-weight:700;color:#A8711E;margin-bottom:14px;">TerraCost</div><p style="opacity:.65;font-size:14px;line-height:1.8;">Open TerraCost at the link below.<br><br>Visit:</p><br><a href="https://terra-cost-india.vercel.app" style="color:#A8711E;font-weight:700;font-size:16px;">terra-cost-india.vercel.app</a></div>
-<!-- Upgrade Modal -->
-<div class="upgrade-overlay" id="upgradeOverlay">
-  <div class="upgrade-box">
-    <h2>Upgrade to TerraCost Pro</h2>
-    <p class="upgrade-reason" id="upgradeReason"></p>
-    <ul class="upgrade-features">
-      <li>Save &amp; access projects from anywhere</li>
-      <li>Excel (.xlsx) exports</li>
-      <li>Custom header, footer &amp; logo on PDFs</li>
-      <li>Full plant library access</li>
-    </ul>
-    <div class="upgrade-plans">
-      <div class="plan-card" onclick="startCheckout('monthly')">
-        <div class="plan-name">Monthly</div>
-        <div class="plan-price">&#8377;1,499</div>
-        <div class="plan-desc">per month</div>
-      </div>
-      <div class="plan-card featured" onclick="startCheckout('yearly')">
-        <div class="plan-name">Annual &#x2605;</div>
-        <div class="plan-price">&#8377;4,999</div>
-        <div class="plan-desc">per year &mdash; save 72%</div>
-      </div>
-    </div>
-    <button class="upgrade-close" onclick="closeUpgradeModal()">Maybe later</button>
-  </div>
-</div>
-
-<!-- Profile Panel -->
-<div class="profile-overlay" id="profileOverlay">
-  <div class="profile-box">
-    <h2>Your Profile</h2>
-    <span class="profile-tier-badge free" id="profileTierBadge">Free</span>
-    <div class="profile-field"><label>Full Name</label><input type="text" id="profileFullName" placeholder="Your name"></div>
-    <div class="profile-field"><label>Company Name</label><input type="text" id="profileCompanyName" placeholder="Zenyard Studio"></div>
-    <div class="profile-field"><label>Phone</label><input type="text" id="profilePhone" placeholder="+91 98765 43210"></div>
-    <div class="profile-field"><label>GSTIN</label><input type="text" id="profileGSTIN" placeholder="22AAAAA0000A1Z5"></div>
-    <div class="profile-field"><label>Custom PDF Header</label><input type="text" id="profileHeader" placeholder="Header text on exports (Pro only)"></div>
-    <div class="profile-field"><label>Custom PDF Footer</label><input type="text" id="profileFooter" placeholder="Footer text on exports (Pro only)"></div>
-    <button class="profile-save-btn" onclick="saveProfile()">Save Profile</button>
-    <button class="profile-close" onclick="closeProfilePanel()">Close</button>
-  </div>
-</div>
-
-</body></html>';
+    document.documentElement.innerHTML = '<html><head><style>*{margin:0;padding:0;box-sizing:border-box;}html,body{width:100%;height:100%;background:#0D2B1E;overflow:hidden;}body{display:flex;align-items:center;justify-content:center;font-family:sans-serif;}</style></head><body><div style="text-align:center;color:#fff;padding:32px;max-width:400px;"><div style="font-size:30px;font-weight:700;color:#A8711E;margin-bottom:14px;">TerraCost</div><p style="opacity:.65;font-size:14px;line-height:1.8;">Open TerraCost at the link below.<br><br>Visit:</p><br><a href="https://terra-cost-india.vercel.app" style="color:#A8711E;font-weight:700;font-size:16px;">terra-cost-india.vercel.app</a></div></body></html>';
     throw new Error('x');
   }
 })();
@@ -2704,8 +2605,6 @@ function updateTotals() {
 
 // ===================== EXCEL EXPORT =====================
 function exportExcel() {
-  if (!_supaUser) { openAuthModal('login'); return; }
-  if (!isPro()) { showUpgradeModal('Excel (.xlsx) export is a TerraCost Pro feature.'); return; }
   try {
   if (typeof XLSX === 'undefined') {
     alert('Excel library not loaded. Check your internet connection and refresh.');
@@ -5694,7 +5593,6 @@ async function authSubmit() {
   }
 
   _supaUser = result.data.user;
-  await fetchUserProfile();
   closeAuthModal();
   updateAuthUI();
 }
@@ -5721,108 +5619,8 @@ function updateAuthUI() {
   }
 }
 
-// --- Feature gating ---
-function isPro() {
-  return _userProfile && (_userProfile.tier === 'pro' || _userProfile.tier === 'business') && _userProfile.status === 'active';
-}
-
-function showUpgradeModal(reason) {
-  document.getElementById('upgradeReason').textContent = reason;
-  document.getElementById('upgradeOverlay').classList.add('open');
-}
-
-function closeUpgradeModal() {
-  document.getElementById('upgradeOverlay').classList.remove('open');
-}
-
-async function startCheckout(plan) {
-  if (!_supaUser) { closeUpgradeModal(); openAuthModal('login'); return; }
-  // Razorpay integration
-  var amount = plan === 'yearly' ? 499900 : 149900; // paise
-  var currency = 'INR';
-  var options = {
-    key: 'rzp_test_placeholder',
-    amount: amount,
-    currency: currency,
-    name: 'TerraCost Pro',
-    description: plan === 'yearly' ? 'Annual Plan' : 'Monthly Plan',
-    handler: async function(response) {
-      // On payment success — update profile tier in Supabase
-      var sb = getSupabase();
-      await sb.from('profiles').update({ tier: 'pro', status: 'active', razorpay_customer_id: response.razorpay_payment_id }).eq('id', _supaUser.id);
-      _userProfile = Object.assign({}, _userProfile, { tier: 'pro', status: 'active' });
-      closeUpgradeModal();
-      updateAuthUI();
-      showCloudSaveToast('Welcome to Pro! All features unlocked.');
-    },
-    prefill: { email: _supaUser ? _supaUser.email : '' },
-    theme: { color: '#1A3829' }
-  };
-  if (typeof Razorpay !== 'undefined') {
-    var rzp = new Razorpay(options);
-    rzp.open();
-  } else {
-    alert('Payment system loading... please try again in a moment.');
-  }
-}
-
-// --- Profile ---
-function openProfilePanel() {
-  if (!_supaUser) { openAuthModal('login'); return; }
-  var p = _userProfile || {};
-  var el = function(id) { return document.getElementById(id); };
-  el('profileFullName').value = p.full_name || '';
-  el('profileCompanyName').value = p.company_name || '';
-  el('profilePhone').value = p.phone || '';
-  el('profileGSTIN').value = p.gstin_vat_number || '';
-  el('profileHeader').value = p.custom_header_text || '';
-  el('profileFooter').value = p.custom_footer_text || '';
-  var badge = el('profileTierBadge');
-  badge.textContent = (p.tier || 'free').toUpperCase();
-  badge.className = 'profile-tier-badge ' + (isPro() ? 'pro' : 'free');
-  document.getElementById('profileOverlay').classList.add('open');
-}
-
-function closeProfilePanel() {
-  document.getElementById('profileOverlay').classList.remove('open');
-}
-
-async function saveProfile() {
-  if (!_supaUser) return;
-  var sb = getSupabase();
-  var updates = {
-    full_name: document.getElementById('profileFullName').value.trim(),
-    company_name: document.getElementById('profileCompanyName').value.trim(),
-    phone: document.getElementById('profilePhone').value.trim(),
-    gstin_vat_number: document.getElementById('profileGSTIN').value.trim(),
-    custom_header_text: document.getElementById('profileHeader').value.trim(),
-    custom_footer_text: document.getElementById('profileFooter').value.trim(),
-    updated_at: new Date().toISOString()
-  };
-  var res = await sb.from('profiles').update(updates).eq('id', _supaUser.id);
-  if (res.error) { alert('Save failed: ' + res.error.message); return; }
-  _userProfile = Object.assign({}, _userProfile, updates);
-  closeProfilePanel();
-  showCloudSaveToast('Profile saved!');
-}
-
-async function fetchUserProfile() {
-  if (!_supaUser) return;
-  var sb = getSupabase();
-  var res = await sb.from('profiles').select('*').eq('id', _supaUser.id).single();
-  if (res.data) {
-    _userProfile = res.data;
-  } else {
-    // Profile might not exist yet — create it
-    var ins = await sb.from('profiles').insert({ id: _supaUser.id, email: _supaUser.email });
-    _userProfile = { id: _supaUser.id, email: _supaUser.email, tier: 'free', status: 'active' };
-  }
-}
-
 // --- Cloud save/load ---
 async function cloudSaveProject() {
-  if (!_supaUser) { openAuthModal('login'); return; }
-  if (!isPro()) { showUpgradeModal('Saving projects to the cloud requires TerraCost Pro.'); return; }
   if (!_supaUser) { openAuthModal('login'); return; }
   var state = getState();
   var name  = (state.meta && state.meta.projectName ? state.meta.projectName : '').trim() || 'Untitled BOQ';
@@ -5948,7 +5746,6 @@ async function initSupaAuth() {
     var sessionRes = await sb.auth.getSession();
     if (sessionRes.data && sessionRes.data.session && sessionRes.data.session.user) {
       _supaUser = sessionRes.data.session.user;
-      await fetchUserProfile();
     }
     updateAuthUI();
 
@@ -6145,50 +5942,6 @@ if (document.readyState === 'loading') {
     <div class="projects-panel-list" id="projectsList">
       <div class="proj-empty">Loading...</div>
     </div>
-  </div>
-</div>
-
-
-<!-- Upgrade Modal -->
-<div class="upgrade-overlay" id="upgradeOverlay">
-  <div class="upgrade-box">
-    <h2>Upgrade to TerraCost Pro</h2>
-    <p class="upgrade-reason" id="upgradeReason"></p>
-    <ul class="upgrade-features">
-      <li>Save &amp; access projects from anywhere</li>
-      <li>Excel (.xlsx) exports</li>
-      <li>Custom header, footer &amp; logo on PDFs</li>
-      <li>Full plant library access</li>
-    </ul>
-    <div class="upgrade-plans">
-      <div class="plan-card" onclick="startCheckout('monthly')">
-        <div class="plan-name">Monthly</div>
-        <div class="plan-price">&#8377;1,499</div>
-        <div class="plan-desc">per month</div>
-      </div>
-      <div class="plan-card featured" onclick="startCheckout('yearly')">
-        <div class="plan-name">Annual &#x2605;</div>
-        <div class="plan-price">&#8377;4,999</div>
-        <div class="plan-desc">per year &mdash; save 72%</div>
-      </div>
-    </div>
-    <button class="upgrade-close" onclick="closeUpgradeModal()">Maybe later</button>
-  </div>
-</div>
-
-<!-- Profile Panel -->
-<div class="profile-overlay" id="profileOverlay">
-  <div class="profile-box">
-    <h2>Your Profile</h2>
-    <span class="profile-tier-badge free" id="profileTierBadge">Free</span>
-    <div class="profile-field"><label>Full Name</label><input type="text" id="profileFullName" placeholder="Your name"></div>
-    <div class="profile-field"><label>Company Name</label><input type="text" id="profileCompanyName" placeholder="Zenyard Studio"></div>
-    <div class="profile-field"><label>Phone</label><input type="text" id="profilePhone" placeholder="+91 98765 43210"></div>
-    <div class="profile-field"><label>GSTIN</label><input type="text" id="profileGSTIN" placeholder="22AAAAA0000A1Z5"></div>
-    <div class="profile-field"><label>Custom PDF Header</label><input type="text" id="profileHeader" placeholder="Header text on exports (Pro only)"></div>
-    <div class="profile-field"><label>Custom PDF Footer</label><input type="text" id="profileFooter" placeholder="Footer text on exports (Pro only)"></div>
-    <button class="profile-save-btn" onclick="saveProfile()">Save Profile</button>
-    <button class="profile-close" onclick="closeProfilePanel()">Close</button>
   </div>
 </div>
 
