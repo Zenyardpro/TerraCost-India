@@ -2022,7 +2022,7 @@ function getState() {
   chargeFields.forEach(id => { const el=document.getElementById(id); if(el) charges[id]=el.value; });
   const refSEl = document.getElementById('referralEnabled'); if(refSEl) charges.referralEnabled = refSEl.checked;
   return {
-    _v: 4,
+    _v: 5,
     meta, currencyCode: currency.code, zones, charges,
     maint: {
       months:  document.getElementById('maintMonths')?.value||12,
@@ -2034,11 +2034,17 @@ function getState() {
 }
 
 function saveState() {
+  const el = document.getElementById('saveStatus');
   try {
     localStorage.setItem('boq_india_v1', JSON.stringify(getState()));
-    const el = document.getElementById('saveStatus');
     if (el) { el.textContent = 'Saved ' + new Date().toLocaleTimeString(); setTimeout(()=>{ if(el) el.textContent=''; },3000); }
-  } catch(e) {}
+  } catch(e) {
+    // Never fail silently — a swallowed autosave looks exactly like a working one.
+    if (el) { el.style.color = '#B03A3A';
+      el.textContent = '\u26A0 NOT SAVED — ' + (e && e.name === 'QuotaExceededError'
+        ? 'browser storage full' : 'local save failed'); }
+    console.error('saveState failed:', e);
+  }
 }
 
 function loadState() {
@@ -2054,6 +2060,25 @@ function loadState() {
     metaFields.forEach(id => { const el=document.getElementById(id); if(el&&s.meta&&s.meta[id]!==undefined) el.value=s.meta[id]; });
     // India edition — currency always INR, no selection needed
     if (Array.isArray(s.zones)) {
+      // ── Migration: v4 → v5 (composite lines: qty was the sub-item COUNT, rate the average) ──
+      if (!s._v || s._v < 5) {
+        s.zones.forEach(z=>(z.scopes||[]).forEach(sc=>(sc.items||[]).forEach(it=>{
+          if (it.complimentary === undefined) it.complimentary = false;
+          const d = it.details||[];
+          if (!d.length) return;
+          const storedTotal = (it.qty||0)*(it.rate||0);           // this value was always correct
+          const setRate = d.reduce((t,x)=>t+((parseFloat(x.qty)||0)*(parseFloat(x.rate)||0)),0);
+          // Old behaviour: qty === sum of sub-item qtys, rate === storedTotal/qty.
+          // Detect it and collapse to 1 set without moving the line total.
+          const legacyQty = d.reduce((t,x)=>t+(parseFloat(x.qty)||0),0);
+          if (legacyQty > 0 && Math.abs((it.qty||0)-legacyQty) < 0.001
+              && Math.abs(storedTotal-setRate) < 0.5) {
+            it.qty = 1;
+            it.rate = +setRate.toFixed(2);
+          }
+          d.forEach(x=>{ if (x.qty === undefined || x.qty === null) x.qty = 1; });
+        })));
+      }
       // ── Migration: v3 → v4 (sitePrep array → Project-wide zone scope) ──
       if (s.sitePrep && s.sitePrep.length > 0) {
         const spScope = {
@@ -2295,7 +2320,7 @@ function addLineItem(zi,si) {
   zones[zi].scopes[si].items.push({
     desc:"", unit:"nos", qty:0, rate:0, notes:"", details:[],
     taxable: !isPlantScope, gstRate: defaultGst,
-    unit_other:"", hsn:""
+    unit_other:"", hsn:"", complimentary:false
   });
   renderZones(); updateTotals();
 }
@@ -2306,7 +2331,7 @@ function toggleDetails(zi,si,ii) {
   const key=`${zi}_${si}_${ii}`; openDetails[key]=!openDetails[key]; renderZones();
 }
 function addDetailRow(zi,si,ii) {
-  zones[zi].scopes[si].items[ii].details.push({name:"",qty:0,rate:0,unit:"nos",unit_other:"",hsn:""});
+  zones[zi].scopes[si].items[ii].details.push({name:"",qty:1,rate:0,unit:"nos",unit_other:"",hsn:"",gstRate:18});
   openDetails[`${zi}_${si}_${ii}`]=true;
   updateDetailTotal(zi,si,ii); renderZones();
 }
@@ -2331,11 +2356,36 @@ function updateDetailUnitOther(zi,si,ii,subi,value) {
 }
 function updateDetailTotal(zi,si,ii) {
   const item=zones[zi].scopes[si].items[ii];
-  const sum=item.details.reduce((t,s)=>t+((parseFloat(s.qty)||0)*(parseFloat(s.rate)||0)),0);
-  const qtyT=item.details.reduce((t,s)=>t+(parseFloat(s.qty)||0),0);
-  item.qty=qtyT;
-  item.rate=(item.details.length>0&&qtyT>0)?+(sum/qtyT).toFixed(2):0;
+  // Set rate = cost of ONE complete set = sum of (per-set qty x rate) across sub-items.
+  // Parent qty is the number of sets and is owned by the user -- never derived.
+  const setRate=item.details.reduce((t,s)=>t+((parseFloat(s.qty)||0)*(parseFloat(s.rate)||0)),0);
+  if(item.details.length>0){
+    item.rate=+setRate.toFixed(2);
+    if(!(parseFloat(item.qty)>0)) item.qty=1;   // default to 1 set, don't clobber a real qty
+  }
   updateTotals();
+}
+
+// Cost of one complete set (composite line) -- used by exports and tax rollup
+function setRateOf(item){
+  return (item.details||[]).reduce((t,s)=>t+((parseFloat(s.qty)||0)*(parseFloat(s.rate)||0)),0);
+}
+
+// Derived tax label for a line: 'No' | 'Yes' | 'Mixed'
+function lineTaxLabel(item){
+  const subs=(item.details||[]).filter(s=>s.gstRate!==undefined);
+  if(subs.length){
+    const anyTax=subs.some(s=>(s.gstRate||0)>0);
+    const allTax=subs.every(s=>(s.gstRate||0)>0);
+    return allTax?'Yes':(anyTax?'Mixed':'No');
+  }
+  const gr=item.gstRate!==undefined?item.gstRate:(item.taxable?18:0);
+  return gr>0?'Yes':'No';
+}
+
+function setComplimentary(zi,si,ii,val){
+  zones[zi].scopes[si].items[ii].complimentary=!!val;
+  renderZones(); updateTotals();
 }
 
 // ===================== RENDER ZONES =====================
@@ -2442,7 +2492,7 @@ function renderZones() {
             <td>
               <input type="number" min="0" value="${item.qty}" style="width:62px;"
                 onchange="updateItem(${zi},${si},${ii},'qty',this.value)"
-                ${isDetail?'readonly tabindex="-1"':''}>
+                ${isDetail?'title="Number of complete sets"':''}>
             </td>
             <td>
               <input type="number" min="0" value="${item.rate}" style="width:86px;"
@@ -2453,7 +2503,9 @@ function renderZones() {
               <input type="text" style="width:82px;" value="${item.hsn||''}"
                 onchange="updateField(${zi},${si},${ii},'hsn',this.value)" placeholder="Tax Code">
             </td>
-            <td style="text-align:right;">${currency.symbol}${fmt(item.qty*item.rate)}</td>
+            <td style="text-align:right;">${item.complimentary
+              ? '<span style="color:#265C3C;font-weight:600;font-size:11px;">Complimentary</span>'
+              : currency.symbol+fmt(item.qty*item.rate)}</td>
             <td style="text-align:center;">
               <select style="width:54px;font-size:11px;padding:2px 2px;margin:0;border-radius:4px;"
                 onchange="setItemTax(${zi},${si},${ii},this.value)">
@@ -2462,6 +2514,11 @@ function renderZones() {
             </td>
             <td>
               <div class="row-actions">
+                <label title="Complimentary — prints as 'Complimentary', excluded from all totals"
+                  style="font-size:10px;display:inline-flex;align-items:center;gap:3px;color:#7E786F;cursor:pointer;margin:0;">
+                  <input type="checkbox" ${item.complimentary?'checked':''} style="width:auto;margin:0;"
+                    onchange="setComplimentary(${zi},${si},${ii},this.checked)">Free
+                </label>
                 <button type="button" class="rowbtn" onclick="deleteLineItem(${zi},${si},${ii})" title="Delete">&times;</button>
                 <button type="button" class="rowbtn" style="background:#2B5E3F;color:#fff;border-color:#2B5E3F;min-width:60px;"
                   onclick="toggleDetails(${zi},${si},${ii})">${openDetails[key]?'▲ Hide':'▼ Details'}</button>
@@ -2472,7 +2529,7 @@ function renderZones() {
             <td colspan="9" style="padding:4px 8px;background:#fdfcf8;">
               <div id="details_${zi}_${si}_${ii}" class="${detailClass}">
                 <div style="font-weight:600;margin-bottom:4px;font-size:13px;">
-                  Sub-items for "${item.desc||'this line'}" — qty &amp; weighted avg. rate roll up to parent row:
+                  Sub-items for "${item.desc||'this line'}" — quantities are <em>per set</em>; set cost ${currency.symbol}${fmt(setRateOf(item))} &times; ${item.qty||0} set(s) = ${currency.symbol}${fmt((item.qty||0)*setRateOf(item))}
                 </div>
                 <table style="width:100%;margin-bottom:6px;">
                   <thead class="subtablehead"><tr>
@@ -2542,13 +2599,30 @@ function renderZones() {
 // ===================== TOTALS =====================
 function getTaxSplitTotals() {
   let taxable=0, nonTaxable=0, gstTotal=0;
+  const byRate = {};   // rate-wise taxable value, for the GST summary table
   zones.forEach(z=>z.scopes.forEach(sc=>sc.items.forEach(it=>{
-    const t  = (it.qty||0)*(it.rate||0);
-    const gr = it.gstRate !== undefined ? it.gstRate : (it.taxable ? 18 : 0);
-    gstTotal += t * gr / 100;
-    if (gr > 0) taxable += t; else nonTaxable += t;
+    if (it.complimentary) return;                       // zero-rated gift, out of every total
+    const setQty = it.qty||0;
+    const subs   = (it.details||[]).filter(s=>s.gstRate!==undefined);
+    if (subs.length) {
+      // Composite line: tax each component at its own rate.
+      // Components sum to the line total exactly, since rate = sum(subQty*subRate).
+      subs.forEach(s=>{
+        const amt = (s.qty||0)*setQty*(s.rate||0);
+        const gr  = s.gstRate||0;
+        gstTotal += amt*gr/100;
+        if (gr>0) taxable += amt; else nonTaxable += amt;
+        byRate[gr] = (byRate[gr]||0) + amt;
+      });
+    } else {
+      const t  = setQty*(it.rate||0);
+      const gr = it.gstRate !== undefined ? it.gstRate : (it.taxable ? 18 : 0);
+      gstTotal += t * gr / 100;
+      if (gr > 0) taxable += t; else nonTaxable += t;
+      byRate[gr] = (byRate[gr]||0) + t;
+    }
   })));
-  return {taxableSubtotal:taxable, nonTaxableSubtotal:nonTaxable, gstTotal};
+  return {taxableSubtotal:taxable, nonTaxableSubtotal:nonTaxable, gstTotal, byRate};
 }
 
 function updateTotals() {
@@ -2922,26 +2996,30 @@ function downloadPDF() {
         if((itm.qty||0) > 0) {
           globalSerial++;
           const serial=`${zi===0?'PW':zi}.${String(globalSerial).padStart(2,'0')}`;
+          const isFree  = !!itm.complimentary;
           const pdfRate = _pdfRefEnabled ? Math.round(itm.rate * _pdfRefMult) : (itm.rate||0);
-          const itemTotal=(itm.qty||0)*pdfRate;
-          zoneTotal+=itemTotal;
+          const setQty  = itm.qty||0;
+          const itemTotal = isFree ? 0 : setQty*pdfRate;
+          zoneTotal += itemTotal;
           // Description + spec/notes combined
           const descText = itm.notes ? `${itm.desc}\n  ${itm.notes}` : itm.desc;
-          body.push([serial, descText, unitLbl, itm.qty,
-            fmtPdf(pdfRate),
-            fmtPdf(itemTotal),
-            itm.taxable?'Yes':'No'
+          body.push([serial, descText, unitLbl, setQty,
+            isFree ? '—' : fmtPdf(pdfRate),
+            isFree ? 'Complimentary' : fmtPdf(itemTotal),
+            isFree ? '—' : lineTaxLabel(itm)
           ]);
           if(itm.details&&itm.details.length) {
             body.push([{content:'  Sub-items:',colSpan:7,styles:{fontStyle:'bold',fillColor:[252,252,240],fontSize:8}}]);
             itm.details.forEach(sub=>{
               const subU=sub.unit==="other"?(sub.unit_other||""):sub.unit||"nos";
+              const subQty=(sub.qty||0)*setQty;          // effective qty across all sets
+              const subRate=_pdfRefEnabled ? Math.round((sub.rate||0)*_pdfRefMult) : (sub.rate||0);
               body.push([
                 '',
                 {content:'   - '+sub.name, styles:{fontStyle:'italic',textColor:[76,83,116],fontSize:8}},
-                subU, sub.qty,
-                fmtPdf(sub.rate||0),
-                fmtPdf((sub.qty||0)*(sub.rate||0)),
+                subU, subQty,
+                isFree ? '—' : fmtPdf(subRate),
+                isFree ? '—' : fmtPdf(subQty*subRate),
                 ''
               ]);
             });
@@ -3263,7 +3341,8 @@ async function downloadExcel() {
 
         const r = ws.addRow([serial, itm.desc||'', itm.notes||'', u,
           itm.qty||0, itm.rate||0, itm.hsn||'', null, itm.taxable?'Yes':'No']);
-        r.getCell(8).value = { formula: `E${r.number}*F${r.number}` };
+        if (itm.complimentary) { r.getCell(6).value=''; r.getCell(8).value='Complimentary'; }
+        else r.getCell(8).value = { formula: `E${r.number}*F${r.number}` };
         r.height = itm.notes ? 20 : 14;
         const isAlt = (r.number%2===0);
 
@@ -3281,8 +3360,9 @@ async function downloadExcel() {
           itm.details.forEach(sub => {
             if (!sub.name && !sub.qty && !sub.rate) return;
             const su = sub.unit==='other'?(sub.unit_other||''):sub.unit||'nos';
-            const sr = ws.addRow(['', `  ↳ ${sub.name}`, '', su, sub.qty||0, sub.rate||0, sub.hsn||'',
-              (sub.qty||0)*(sub.rate||0), '']);
+            const sQty = (sub.qty||0)*(itm.qty||0);      // effective qty across all sets
+            const sr = ws.addRow(['', `  ↳ ${sub.name}`, '', su, sQty, sub.rate||0, sub.hsn||'',
+              itm.complimentary ? '' : sQty*(sub.rate||0), '']);
             sr.height = 13;
             sr.eachCell((cell, col) => {
               cell.fill = bg('FDFCF8');
@@ -5601,6 +5681,9 @@ async function supaLogout() {
   var sb = getSupabase();
   await sb.auth.signOut();
   _supaUser = null;
+  // Drop the project pointer — it belongs to the account that just left.
+  _currentProjectId = null;
+  try { localStorage.removeItem('boq_current_project_id'); } catch(e) {}
   updateAuthUI();
 }
 
@@ -5627,25 +5710,43 @@ async function cloudSaveProject() {
 
   var sb = getSupabase();
 
+  var savedId = null;
+
   if (_currentProjectId) {
-    // UPDATE existing row by id
+    // UPDATE existing row. .select() is REQUIRED: without it a row that doesn't
+    // exist, or that RLS hides (e.g. it belongs to another account), returns
+    // success with 0 rows affected and the save is silently lost.
     var upd = await sb
       .from('projects')
       .update({ name: name, data: state, updated_at: new Date().toISOString() })
-      .eq('id', _currentProjectId);
+      .eq('id', _currentProjectId)
+      .eq('user_id', _supaUser.id)
+      .select('id');
     if (upd.error) { alert('Save failed: ' + upd.error.message); return; }
-    showCloudSaveToast('Project updated in cloud!');
-  } else {
-    // INSERT new row, capture returned id
+    if (upd.data && upd.data.length) {
+      savedId = upd.data[0].id;
+      showCloudSaveToast('Project updated in cloud!');
+    } else {
+      // Stale project id — row deleted, or signed in as a different account.
+      // Fall through to INSERT rather than pretending the save worked.
+      _currentProjectId = null;
+      try { localStorage.removeItem('boq_current_project_id'); } catch(e) {}
+    }
+  }
+
+  if (!savedId) {
     var ins = await sb
       .from('projects')
       .insert({ user_id: _supaUser.id, name: name, data: state })
       .select('id')
       .single();
     if (ins.error) { alert('Save failed: ' + ins.error.message); return; }
-    _currentProjectId = ins.data.id;
+    savedId = ins.data.id;
     showCloudSaveToast('Project saved to cloud!');
   }
+
+  _currentProjectId = savedId;
+  try { localStorage.setItem('boq_current_project_id', savedId); } catch(e) {}
 }
 
 function showCloudSaveToast(msg) {
@@ -5732,6 +5833,10 @@ async function cloudDeleteProject(id, name) {
   var sb = getSupabase();
   var res = await sb.from('projects').delete().eq('id', id);
   if (res.error) { alert('Delete failed: ' + res.error.message); return; }
+  if (_currentProjectId === id) {
+    _currentProjectId = null;
+    try { localStorage.removeItem('boq_current_project_id'); } catch(e) {}
+  }
   loadProjectsList();
 }
 
@@ -5751,7 +5856,13 @@ async function initSupaAuth() {
 
     // Listen for auth state changes
     sb.auth.onAuthStateChange(function(event, session) {
-      _supaUser = (session && session.user) ? session.user : null;
+      var newUser = (session && session.user) ? session.user : null;
+      // Different account signed in — the stored project id is not theirs.
+      if (newUser && _supaUser && newUser.id !== _supaUser.id) {
+        _currentProjectId = null;
+        try { localStorage.removeItem('boq_current_project_id'); } catch(e) {}
+      }
+      _supaUser = newUser;
       updateAuthUI();
     });
   } catch(e) {
