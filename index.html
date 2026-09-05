@@ -1232,6 +1232,8 @@
       <input type="file" id="importFile" style="display:none" accept=".json" onchange="readImport(this)">
       <button class="smallbtn delete" onclick="newBOQ()">+ New BOQ</button>
       <span id="saveStatus"></span>
+      <span id="buildStamp" title="Build currently running in your browser"
+        style="font-size:10px;color:#9E8E7E;margin-left:8px;font-family:monospace;">build 2026-09-05d</span>
     </div>
   </div>
 
@@ -1981,6 +1983,72 @@ const SCOPE_ORDER = [
   'Partitions & Screening',
 ];
 
+// ===================== COST DISTRIBUTION =====================
+// Every scope maps to a client-facing category, so the summary derives itself
+// from the BOQ rather than being assembled by hand per project.
+const COST_CATEGORY = {
+  'Site Preparation':                  'Site Preparation & Services',
+  'Drainage':                          'Site Preparation & Services',
+  'Irrigation System':                 'Site Preparation & Services',
+  'Engineered Soil Media':             'Site Preparation & Services',
+  'Hardscape — Paving':                'Hardscape',
+  'Hardscape — Structures':            'Hardscape',
+  'Water Features':                    'Hardscape',
+  'Fencing & Gates':                   'Metalwork & Screening',
+  'Partitions & Screening':            'Metalwork & Screening',
+  'Softscape — Trees':                 'Softscape & Planting',
+  'Plantation & Avenue Trees':         'Softscape & Planting',
+  'Softscape — Shrubs & Groundcovers': 'Softscape & Planting',
+  'Turf & Lawn':                       'Softscape & Planting',
+  'Green Walls':                       'Softscape & Planting',
+  'Potted Plants':                     'Softscape & Planting',
+  'Built-in Box Planting':             'Softscape & Planting',
+  'Outdoor Lighting':                  'Lighting & Furnishings',
+  'Site Furnishings':                  'Lighting & Furnishings',
+};
+const CATEGORY_ORDER = [
+  'Site Preparation & Services', 'Hardscape', 'Metalwork & Screening',
+  'Softscape & Planting', 'Lighting & Furnishings', 'Other',
+];
+const CATEGORY_COLOR = {
+  'Site Preparation & Services': '#8A7A5C',
+  'Hardscape':                   '#5C4626',
+  'Metalwork & Screening':       '#4A6070',
+  'Softscape & Planting':        '#2B5E3F',
+  'Lighting & Furnishings':      '#A8763E',
+  'Other':                       '#9E8E7E',
+};
+
+function lineValue(it) {
+  return it.complimentary ? 0 : (it.qty||0)*(it.rate||0);
+}
+
+function getCategorySplit() {
+  const acc = {};
+  zones.forEach(z=>z.scopes.forEach(sc=>{
+    const c = COST_CATEGORY[sc.name] || 'Other';
+    sc.items.forEach(it=>{ acc[c] = (acc[c]||0) + lineValue(it); });
+  }));
+  const total = Object.keys(acc).reduce((t,k)=>t+acc[k],0);
+  const rows = CATEGORY_ORDER.filter(c=>acc[c] > 0).map(c=>({
+    name:c, amount:acc[c], pct: total ? acc[c]/total*100 : 0, color: CATEGORY_COLOR[c]
+  }));
+  return {rows, total};
+}
+
+function getZoneSplit() {
+  const rows = [];
+  zones.forEach((z,zi)=>{
+    let t = 0;
+    z.scopes.forEach(sc=>sc.items.forEach(it=>{ t += lineValue(it); }));
+    if (t > 0) rows.push({ name: zi===0 ? 'Project-wide' : (z.name || ('Zone '+zi)), amount:t });
+  });
+  const total = rows.reduce((t,r)=>t+r.amount, 0);
+  rows.forEach(r=>{ r.pct = total ? r.amount/total*100 : 0; });
+  rows.sort((a,b)=>b.amount-a.amount);
+  return {rows, total};
+}
+
 // ===================== UNIT HELPER =====================
 function unitOptionsByLine(desc) {
   desc = (desc||"").toLowerCase();
@@ -2665,7 +2733,25 @@ function updateTotals() {
     discountP>0 ? [`Discount @ ${discountP}%`, '-'+s+fmt(discountAmt), 'discrow'] : null,
   ].filter(Boolean);
 
-  let html = rows.map(r=>`<div class="trow ${r[2]||''}"><span class="tlabel">${r[0]}</span><span class="tval">${r[1]}</span></div>`).join('');
+  // Cost distribution — where the money actually went
+  const split = getCategorySplit();
+  let html = '';
+  if (split.total > 0 && split.rows.length > 1) {
+    html += `<div style="margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #E8E3DA;">
+      <div style="font-size:11px;font-weight:600;color:#7E786F;letter-spacing:.04em;margin-bottom:6px;">COST DISTRIBUTION</div>
+      ${split.rows.map(r=>`
+        <div style="margin-bottom:5px;">
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:#3A3630;">
+            <span>${r.name}</span>
+            <span style="font-variant-numeric:tabular-nums;">${s}${fmt(r.amount)} &nbsp;<strong style="color:#7E786F;">${r.pct.toFixed(0)}%</strong></span>
+          </div>
+          <div style="height:4px;background:#EDE8E0;border-radius:2px;margin-top:2px;overflow:hidden;">
+            <div style="height:100%;width:${r.pct.toFixed(1)}%;background:${r.color};"></div>
+          </div>
+        </div>`).join('')}
+    </div>`;
+  }
+  html += rows.map(r=>`<div class="trow ${r[2]||''}"><span class="tlabel">${r[0]}</span><span class="tval">${r[1]}</span></div>`).join('');
   html += `<div class="trow grandrow"><span class="tlabel">GRAND TOTAL</span><span class="tval">${s}${fmt(grand)}</span></div>`;
   if(maintTotal>0) html+=`<div class="trow" style="font-size:13px;color:#4a7a30;margin-top:6px;">
     <span class="tlabel">AMC Contract — ${maintMonths} months (${maintItems.length} services)</span>
@@ -2963,6 +3049,44 @@ function downloadPDF() {
 
   function checkPage(needed) {
     if (y + needed > ph - 20) { doc.addPage(); y = 18; }
+  }
+
+  // ---- Cost summary (page 1) ----
+  {
+    const cs = getCategorySplit();
+    const zs = getZoneSplit();
+    if (cs.total > 0) {
+      doc.setFontSize(12); doc.setFont("helvetica","bold"); doc.setTextColor(80,50,15);
+      doc.text('Cost Summary', 12, y);
+      doc.setFontSize(8); doc.setFont("helvetica","normal"); doc.setTextColor(120,110,95);
+      doc.text('Works value before GST. Complimentary items excluded.', 12, y+4.5);
+      doc.setTextColor(0,0,0);
+
+      const half = pw/2 - 16;
+      doc.autoTable({
+        startY: y+8,
+        head: [['By Category', S, 'Share']],
+        body: cs.rows.map(r=>[r.name, fmtPdf(r.amount), r.pct.toFixed(1)+'%']),
+        foot: [['Works Subtotal', fmtPdf(cs.total), '100.0%']],
+        theme:'grid',
+        styles:{font:'helvetica',fontSize:9,cellPadding:2.2},
+        headStyles:{fillColor:[41,128,185],textColor:255},
+        footStyles:{fillColor:[240,236,228],textColor:20,fontStyle:'bold'},
+        columnStyles:{1:{halign:'right',cellWidth:32},2:{halign:'right',cellWidth:20}},
+        margin:{left:12}, tableWidth: half,
+      });
+      doc.autoTable({
+        startY: y+8,
+        head: [['By Zone', S, 'Share']],
+        body: zs.rows.map(r=>[r.name, fmtPdf(r.amount), r.pct.toFixed(1)+'%']),
+        theme:'grid',
+        styles:{font:'helvetica',fontSize:9,cellPadding:2.2},
+        headStyles:{fillColor:[41,128,185],textColor:255},
+        columnStyles:{1:{halign:'right',cellWidth:32},2:{halign:'right',cellWidth:20}},
+        margin:{left:pw/2+4}, tableWidth: half,
+      });
+      doc.addPage(); y = 18;
+    }
   }
 
   // ---- Zones (Project-wide at index 0, named zones follow) ----
@@ -5705,9 +5829,19 @@ function updateAuthUI() {
 // --- Cloud save/load ---
 async function cloudSaveProject() {
   if (!_supaUser) { openAuthModal('login'); return; }
-  var state = getState();
-  var name  = (state.meta && state.meta.projectName ? state.meta.projectName : '').trim() || 'Untitled BOQ';
 
+  // A project with no name is unfindable in the panel later — ask for one.
+  var nameEl = document.getElementById('projectName');
+  var name = (nameEl && nameEl.value ? nameEl.value : '').trim();
+  if (!name) {
+    var clientNm = (document.getElementById('clientName')||{}).value || '';
+    var suggested = clientNm.trim() || '';
+    name = (window.prompt('Name this project before saving:', suggested) || '').trim();
+    if (!name) return;                       // cancelled — save nothing rather than an untitled row
+    if (nameEl) { nameEl.value = name; }
+  }
+
+  var state = getState();                    // built AFTER the name is set, so meta carries it
   var sb = getSupabase();
 
   var savedId = null;
@@ -5843,6 +5977,7 @@ async function cloudDeleteProject(id, name) {
 // --- Init auth on page load ---
 async function initSupaAuth() {
   try {
+    console.log('TerraCost build 2026-09-05d');
     // Restore current project id if returning to a loaded project
     var storedId = localStorage.getItem('boq_current_project_id');
     if (storedId) { _currentProjectId = storedId; }
@@ -5852,6 +5987,22 @@ async function initSupaAuth() {
     if (sessionRes.data && sessionRes.data.session && sessionRes.data.session.user) {
       _supaUser = sessionRes.data.session.user;
     }
+
+    // The stored project id may belong to a different account, or to a row that
+    // no longer exists. Either way it would make every save a silent no-op.
+    if (_currentProjectId && _supaUser) {
+      var chk = await sb.from('projects')
+        .select('id')
+        .eq('id', _currentProjectId)
+        .eq('user_id', _supaUser.id)
+        .maybeSingle();
+      if (!chk.data) {
+        console.warn('Clearing stale project id:', _currentProjectId);
+        _currentProjectId = null;
+        try { localStorage.removeItem('boq_current_project_id'); } catch(e) {}
+      }
+    }
+
     updateAuthUI();
 
     // Listen for auth state changes
