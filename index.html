@@ -5834,10 +5834,9 @@ async function cloudSaveProject() {
   var nameEl = document.getElementById('projectName');
   var name = (nameEl && nameEl.value ? nameEl.value : '').trim();
   if (!name) {
+    // window.prompt is blocked on mobile — fallback: use client name or auto-name
     var clientNm = (document.getElementById('clientName')||{}).value || '';
-    var suggested = clientNm.trim() || '';
-    name = (window.prompt('Name this project before saving:', suggested) || '').trim();
-    if (!name) return;                       // cancelled — save nothing rather than an untitled row
+    name = clientNm.trim() || ('Project ' + new Date().toLocaleDateString('en-IN'));
     if (nameEl) { nameEl.value = name; }
   }
 
