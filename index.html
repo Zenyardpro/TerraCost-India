@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>TerraCost India — Landscape BOQ & Estimating Tool | by TerraOS</title>
+  <title>TerraCost — Landscape BOQ &amp; Proposal Builder</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
@@ -1156,6 +1156,13 @@
   .terra-eco-strip .eco-sep { opacity: .35; }
   .terra-eco-strip .eco-soon { opacity: .45; cursor: default; }
 
+  /* ── App footer ─────────────────────────────────── */
+  .app-footer { margin: 40px 0 120px; padding-top: 18px; border-top: 1px solid #EDE8E0; text-align: center; font-size: 12px; color: #9E8E7E; }
+  .app-footer-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 18px; margin-bottom: 8px; }
+  .app-footer-links a { color: #4A3010; text-decoration: none; font-weight: 500; }
+  .app-footer-links a:hover { color: #A87118; text-decoration: underline; }
+  .app-footer-legal { font-size: 11px; opacity: .8; }
+
   </style>
 </head>
 <body>
@@ -1164,13 +1171,9 @@
   <span class="eco-sep">·</span>
   <a href="https://terrascope-ten.vercel.app">TerraScope</a>
   <span class="eco-sep">·</span>
-  <span class="eco-soon">TerraDesign <sup>soon</sup></span>
-  <span class="eco-sep">·</span>
-  <a href="https://terra-cost-landing.vercel.app" class="eco-active">TerraCost</a>
-  <span class="eco-sep">·</span>
-  <span class="eco-soon">TerraExec <sup>soon</sup></span>
+  <a href="https://terracost.io" class="eco-active">TerraCost</a>
   <span class="eco-sep">|</span>
-  <a href="https://terracostgulf.vercel.app" style="color:#A87118;">🌍 Gulf Edition</a>
+  <a href="https://gulf.terracost.io" style="color:#A87118;">🌍 Gulf Edition</a>
 </div>
 
 <div id="splashOverlay">
@@ -1232,8 +1235,6 @@
       <input type="file" id="importFile" style="display:none" accept=".json" onchange="readImport(this)">
       <button class="smallbtn delete" onclick="newBOQ()">+ New BOQ</button>
       <span id="saveStatus"></span>
-      <span id="buildStamp" title="Build currently running in your browser"
-        style="font-size:10px;color:#9E8E7E;margin-left:8px;font-family:monospace;">build 2026-09-05d</span>
     </div>
   </div>
 
@@ -1436,6 +1437,18 @@
     <div class="totals-block" id="totalsBlock"></div>
   </div>
 
+  <!-- APP FOOTER -->
+  <footer class="app-footer">
+    <div class="app-footer-links">
+      <a href="https://terracost.io/about.html">About</a>
+      <a href="https://terracost.io/contact.html">Contact</a>
+      <a href="https://terracost.io/privacy.html">Privacy</a>
+      <a href="https://terracost.io/terms.html">Terms</a>
+      <a href="mailto:support@terracost.io">support@terracost.io</a>
+    </div>
+    <div class="app-footer-legal">&copy; 2026 SOW Business Solutions Pvt Ltd &middot; Bengaluru, India &middot; TerraCost is part of TerraOS</div>
+  </footer>
+
 </div>
 
 <!-- STICKY BOTTOM BAR -->
@@ -1467,10 +1480,10 @@
 <script>
 (function() {
   var host = window.location.hostname;
-  var allowed = ['terra-cost-india.vercel.app', 'terracostgulf.netlify.app', 'terracostindia.netlify.app', 'terracost.netlify.app', 'terraos.netlify.app', 'localhost', '127.0.0.1', ''];
+  var allowed = ['app.terracost.io', 'app.terracost.in', 'terracost.io', 'www.terracost.io', 'terracost.in', 'www.terracost.in', 'terra-cost-india.vercel.app', 'terracostgulf.netlify.app', 'terracostindia.netlify.app', 'terracost.netlify.app', 'terraos.netlify.app', 'localhost', '127.0.0.1', ''];
   if (!allowed.includes(host)) {
     // Immediately stop all rendering
-    document.documentElement.innerHTML = '<html><head><style>*{margin:0;padding:0;box-sizing:border-box;}html,body{width:100%;height:100%;background:#0D2B1E;overflow:hidden;}body{display:flex;align-items:center;justify-content:center;font-family:sans-serif;}</style></head><body><div style="text-align:center;color:#fff;padding:32px;max-width:400px;"><div style="font-size:30px;font-weight:700;color:#A8711E;margin-bottom:14px;">TerraCost</div><p style="opacity:.65;font-size:14px;line-height:1.8;">Open TerraCost at the link below.<br><br>Visit:</p><br><a href="https://terra-cost-india.vercel.app" style="color:#A8711E;font-weight:700;font-size:16px;">terra-cost-india.vercel.app</a></div></body></html>';
+    document.documentElement.innerHTML = '<html><head><style>*{margin:0;padding:0;box-sizing:border-box;}html,body{width:100%;height:100%;background:#0D2B1E;overflow:hidden;}body{display:flex;align-items:center;justify-content:center;font-family:sans-serif;}</style></head><body><div style="text-align:center;color:#fff;padding:32px;max-width:400px;"><div style="font-size:30px;font-weight:700;color:#A8711E;margin-bottom:14px;">TerraCost</div><p style="opacity:.65;font-size:14px;line-height:1.8;">Open TerraCost at the link below.<br><br>Visit:</p><br><a href="https://app.terracost.io" style="color:#A8711E;font-weight:700;font-size:16px;">app.terracost.io</a></div></body></html>';
     throw new Error('x');
   }
 })();
@@ -3012,7 +3025,7 @@ function downloadPDF() {
   // ---- Header ----
   doc.setFillColor(92,70,38); doc.rect(0,0,pw,22,'F');
   doc.setFontSize(14); doc.setFont("helvetica","bold"); doc.setTextColor(255,245,220);
-  doc.text("BILL OF QUANTITIES & COST ESTIMATE", pw/2, 9, {align:"center"});
+  doc.text("LANDSCAPE BILL OF QUANTITIES & PROPOSAL", pw/2, 9, {align:"center"});
   doc.setFontSize(9); doc.setFont("helvetica","normal");
   const firmLine  = [meta.firmName, meta.firmContact].filter(Boolean).join('  |  ');
   const gstinLine = [meta.firmAddr, meta.firmGSTIN && `GSTIN: ${meta.firmGSTIN}`, meta.firmPAN && `PAN: ${meta.firmPAN}`].filter(Boolean).join('  |  ');
@@ -3299,7 +3312,7 @@ function downloadPDF() {
     doc.setFontSize(8); doc.setTextColor(150);
     doc.text(`${meta.quoteRef||'BOQ'}  |  Rev ${meta.revision||1}  |  Page ${i} of ${totalPages}`, pw/2, ph-7, {align:'center'});
     doc.setFontSize(7); doc.setTextColor(180);
-    doc.text('Prepared using TerraCost — <a href="https://terraio.vercel.app" style="color:inherit;text-decoration:none;">by TerraOS</a> · terra-cost-india.vercel.app', pw/2, ph-3, {align:'center'});
+    doc.text('Prepared with TerraCost  ·  terracost.io', pw/2, ph-3, {align:'center'});
   }
 
   // ---- Dynamic filename ----
@@ -5976,7 +5989,7 @@ async function cloudDeleteProject(id, name) {
 // --- Init auth on page load ---
 async function initSupaAuth() {
   try {
-    console.log('TerraCost build 2026-09-05d');
+    console.log('TerraCost');
     // Restore current project id if returning to a loaded project
     var storedId = localStorage.getItem('boq_current_project_id');
     if (storedId) { _currentProjectId = storedId; }
