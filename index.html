@@ -3,11 +3,32 @@
 <head>
   <meta charset="UTF-8" />
   <title>TerraCost — Landscape BOQ &amp; Proposal Builder</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <!-- Supabase: deferred so it doesn't block first paint -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js" defer></script>
+  <!-- Export libs: loaded on demand when user clicks Export -->
+  <script>
+  var _exportLibsLoaded = false;
+  var _exportLibsLoading = false;
+  function loadExportLibs(callback) {
+    if (_exportLibsLoaded) { callback(); return; }
+    if (_exportLibsLoading) { setTimeout(function(){ loadExportLibs(callback); }, 100); return; }
+    _exportLibsLoading = true;
+    var libs = [
+      'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js',
+      'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'
+    ];
+    var loaded = 0;
+    libs.forEach(function(src) {
+      var s = document.createElement('script');
+      s.src = src;
+      s.onload = function() { if (++loaded === libs.length) { _exportLibsLoaded = true; _exportLibsLoading = false; callback(); } };
+      s.onerror = function() { console.error('Failed to load:', src); };
+      document.head.appendChild(s);
+    });
+  }
+  </script>
     <style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap');
 
@@ -1166,6 +1187,19 @@
   </style>
 </head>
 <body>
+<!-- Instant loading overlay — hidden as soon as JS runs -->
+<div id="appLoadingOverlay" style="position:fixed;inset:0;z-index:99999;background:#1A3829;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;font-family:'DM Sans',sans-serif;">
+  <div style="font-size:22px;font-weight:700;color:#EAE6DF;letter-spacing:.5px;">TerraCost</div>
+  <div style="width:36px;height:36px;border:3px solid rgba(234,230,223,.2);border-top-color:#EAE6DF;border-radius:50%;animation:tcSpin .7s linear infinite;"></div>
+  <style>@keyframes tcSpin{to{transform:rotate(360deg)}}</style>
+</div>
+<script>
+  // Hide overlay as soon as DOM is interactive — prevents blank screen flash
+  document.addEventListener('DOMContentLoaded', function() {
+    var ov = document.getElementById('appLoadingOverlay');
+    if (ov) { ov.style.opacity='0'; ov.style.transition='opacity .3s'; setTimeout(function(){ ov.style.display='none'; }, 300); }
+  });
+</script>
 <div class="terra-eco-strip">
   <a href="https://terraio.vercel.app">TerraOS</a>
   <span class="eco-sep">·</span>
