@@ -1200,46 +1200,7 @@
       #zonesContainer { margin-left: 0 !important; margin-right: 0 !important; }
       .zone-block { padding-left: 10px !important; padding-right: 10px !important; }
     }
-  
-  /* ── Upgrade & Profile Modals ──────────────────── */
-  .tc-overlay {
-    display:none; position:fixed; inset:0;
-    background:rgba(0,0,0,.55); z-index:8000;
-    align-items:center; justify-content:center; padding:16px;
-  }
-  .tc-overlay.open { display:flex; }
-  .tc-modal {
-    background:var(--cream,#F5F1EA); border-radius:12px;
-    padding:28px; max-width:400px; width:100%;
-    font-family:'DM Sans',system-ui,sans-serif;
-    box-shadow:0 12px 48px rgba(0,0,0,.25);
-    max-height:90vh; overflow-y:auto;
-  }
-  .tc-modal h2 { margin:0 0 6px; font-size:17px; color:#1A3829; }
-  .tc-modal .upgrade-reason { font-size:13px; color:#7A6E62; margin-bottom:18px; }
-  .upgrade-plans { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
-  .upgrade-plan {
-    border:2px solid #DDD8CF; border-radius:8px; padding:14px 10px;
-    text-align:center; cursor:pointer; background:#fff; transition:.15s;
-  }
-  .upgrade-plan:hover { border-color:#1A3829; }
-  .upgrade-plan.featured { border-color:#1A3829; background:#F0F5F1; }
-  .upgrade-plan .plan-name { font-size:11px; font-weight:700; color:#7A6E62; text-transform:uppercase; letter-spacing:.05em; }
-  .upgrade-plan .plan-price { font-size:22px; font-weight:700; color:#1A3829; margin:4px 0 2px; }
-  .upgrade-plan .plan-desc { font-size:11px; color:#A8A098; }
-  .upgrade-features { list-style:none; padding:0; margin:0 0 18px; font-size:13px; color:#5A5450; }
-  .upgrade-features li { padding:3px 0; }
-  .upgrade-features li::before { content:"✓ "; color:#1A3829; font-weight:700; }
-  .tc-close-btn { background:none; border:none; color:#A8A098; font-size:12px; cursor:pointer; width:100%; text-align:center; margin-top:6px; }
-  .profile-field { margin-bottom:12px; }
-  .profile-field label { display:block; font-size:11px; font-weight:600; color:#7A6E62; text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px; }
-  .profile-field input { width:100%; padding:8px 10px; border:1px solid #DDD8CF; border-radius:6px; font-size:13px; box-sizing:border-box; }
-  .profile-save { background:#1A3829; color:#F5F1EA; border:none; border-radius:6px; padding:10px 20px; font-size:13px; font-weight:600; cursor:pointer; width:100%; margin-top:4px; }
-  .profile-save:hover { background:#254D38; }
-  .tier-badge { display:inline-block; padding:2px 10px; border-radius:20px; font-size:10px; font-weight:700; letter-spacing:.05em; margin-bottom:14px; }
-  .tier-free { background:#EDE8DF; color:#7A6E62; }
-  .tier-pro  { background:#1A3829; color:#F5F1EA; }
-</style>
+  </style>
 </head>
 <body>
 <!-- Instant loading overlay — hidden as soon as JS runs -->
@@ -1253,11 +1214,6 @@
   document.addEventListener('DOMContentLoaded', function() {
     var ov = document.getElementById('appLoadingOverlay');
     if (ov) { ov.style.opacity='0'; ov.style.transition='opacity .3s'; setTimeout(function(){ ov.style.display='none'; }, 300); }
-    // Dismiss splash early — no need to wait for window.onload / external CDN scripts
-    setTimeout(function() {
-      var sp = document.getElementById('splashOverlay');
-      if (sp) { sp.classList.add('hiding'); setTimeout(function(){ sp.style.display='none'; }, 420); }
-    }, 800);
   });
 </script>
 <div class="terra-eco-strip">
@@ -1309,7 +1265,7 @@
       <span class="auth-login-link" onclick="openAuthModal('signup')">Sign Up</span>
     </div>
     <div id="authLoggedIn" style="display:none;align-items:center;gap:10px;width:100%;flex-wrap:wrap;">
-      <span class="auth-email" id="authUserEmail" onclick="openProfilePanel()" style="cursor:pointer;" title="View profile"></span>
+      <span class="auth-email" id="authUserEmail"></span>
       <button class="auth-save-btn" onclick="cloudSaveProject()">&#9729; Save Project</button>
       <button onclick="openProjectsPanel()">My Projects</button>
       <button onclick="supaLogout()" style="margin-left:auto;">Log Out</button>
@@ -1583,52 +1539,7 @@
   var allowed = ['ind.terracost.io', 'app.terracost.io', 'app.terracost.in', 'terracost.io', 'www.terracost.io', 'terracost.in', 'www.terracost.in', 'terra-cost-india.vercel.app', 'terracostgulf.netlify.app', 'terracostindia.netlify.app', 'terracost.netlify.app', 'terraos.netlify.app', 'localhost', '127.0.0.1', ''];
   if (!allowed.includes(host) && !host.endsWith('.terracost.io') && !host.endsWith('.terracost.in')) {
     // Immediately stop all rendering
-    document.documentElement.innerHTML = '<html><head><style>*{margin:0;padding:0;box-sizing:border-box;}html,body{width:100%;height:100%;background:#0D2B1E;overflow:hidden;}body{display:flex;align-items:center;justify-content:center;font-family:sans-serif;}</style></head><body><div style="text-align:center;color:#fff;padding:32px;max-width:400px;"><div style="font-size:30px;font-weight:700;color:#A8711E;margin-bottom:14px;">TerraCost</div><p style="opacity:.65;font-size:14px;line-height:1.8;">Open TerraCost at the link below.<br><br>Visit:</p><br><a href="https://app.terracost.io" style="color:#A8711E;font-weight:700;font-size:16px;">app.terracost.io</a></div>
-<!-- Upgrade Modal -->
-<div class="tc-overlay" id="upgradeOverlay">
-  <div class="tc-modal">
-    <h2>Upgrade to TerraCost Pro</h2>
-    <p class="upgrade-reason" id="upgradeReason"></p>
-    <ul class="upgrade-features">
-      <li>Cloud save &amp; project history</li>
-      <li>Excel (.xlsx) export</li>
-      <li>Custom header, footer &amp; logo on PDFs</li>
-      <li>Full plant library access</li>
-    </ul>
-    <div class="upgrade-plans">
-      <div class="upgrade-plan" onclick="startCheckout('monthly')">
-        <div class="plan-name">Monthly</div>
-        <div class="plan-price">&#8377;1,200</div>
-        <div class="plan-desc">per month</div>
-      </div>
-      <div class="upgrade-plan featured" onclick="startCheckout('yearly')">
-        <div class="plan-name">Annual &#9733;</div>
-        <div class="plan-price">&#8377;4,950</div>
-        <div class="plan-desc">per year &mdash; ₹11,950 after 500 users</div>
-      </div>
-    </div>
-    <p style="font-size:11px;color:#A8A098;text-align:center;margin:4px 0 8px;">Founding price — locked for life for the first 500 users.</p>
-    <button class="tc-close-btn" onclick="closeUpgradeModal()">Maybe later</button>
-  </div>
-</div>
-
-<!-- Profile Panel -->
-<div class="tc-overlay" id="profileOverlay">
-  <div class="tc-modal">
-    <h2>Your Profile</h2>
-    <span class="tier-badge tier-free" id="profileTierBadge">FREE</span>
-    <div class="profile-field"><label>Full Name</label><input type="text" id="pfFullName" placeholder="Your name"></div>
-    <div class="profile-field"><label>Company Name</label><input type="text" id="pfCompany" placeholder="Zenyard Studio"></div>
-    <div class="profile-field"><label>Phone</label><input type="text" id="pfPhone" placeholder="+91 98765 43210"></div>
-    <div class="profile-field"><label>GSTIN</label><input type="text" id="pfGSTIN" placeholder="22AAAAA0000A1Z5"></div>
-    <div class="profile-field"><label>PDF Header Text (Pro)</label><input type="text" id="pfHeader" placeholder="Company name &amp; tagline on exports"></div>
-    <div class="profile-field"><label>PDF Footer Text (Pro)</label><input type="text" id="pfFooter" placeholder="Contact info on exports"></div>
-    <button class="profile-save" onclick="saveProfile()">Save Profile</button>
-    <button class="tc-close-btn" onclick="closeProfilePanel()">Close</button>
-  </div>
-</div>
-
-</body></html>';
+    document.documentElement.innerHTML = '<html><head><style>*{margin:0;padding:0;box-sizing:border-box;}html,body{width:100%;height:100%;background:#0D2B1E;overflow:hidden;}body{display:flex;align-items:center;justify-content:center;font-family:sans-serif;}</style></head><body><div style="text-align:center;color:#fff;padding:32px;max-width:400px;"><div style="font-size:30px;font-weight:700;color:#A8711E;margin-bottom:14px;">TerraCost</div><p style="opacity:.65;font-size:14px;line-height:1.8;">Open TerraCost at the link below.<br><br>Visit:</p><br><a href="https://app.terracost.io" style="color:#A8711E;font-weight:700;font-size:16px;">app.terracost.io</a></div></body></html>';
     throw new Error('x');
   }
 })();
@@ -3127,8 +3038,6 @@ function updateTotals() {
 
 // ===================== EXCEL EXPORT =====================
 function exportExcel() {
-  if (!_supaUser) { openAuthModal('login'); return; }
-  if (!isPro()) { showUpgradeModal('Excel (.xlsx) export requires TerraCost Pro.'); return; }
   if (!requirePro(exportExcel)) return;
   try {
   if (typeof XLSX === 'undefined') {
@@ -6122,13 +6031,57 @@ window.onload = function() {
 };
 
 
+
+function showUpgradeModal(reason) {
+  var el = document.getElementById('upgradeReason');
+  if (el) el.textContent = reason || '';
+  var ov = document.getElementById('upgradeOverlay');
+  if (ov) ov.classList.add('open');
+}
+
+function closeUpgradeModal() {
+  var ov = document.getElementById('upgradeOverlay');
+  if (ov) ov.classList.remove('open');
+}
+
+function startCheckout(plan) {
+  if (!_supaUser) { closeUpgradeModal(); openAuthModal('login'); return; }
+  var amount = plan === 'yearly' ? 495000 : 120000; // paise
+  var options = {
+    key: 'rzp_live_TfV1nW2o5AfJlG',
+    amount: amount,
+    currency: 'INR',
+    name: 'TerraCost Pro',
+    description: plan === 'yearly' ? 'Annual Plan — ₹4,950/yr' : 'Monthly Plan — ₹1,200/mo',
+    handler: async function(response) {
+      var sb = getSupabase();
+      await sb.from('profiles').update({
+        tier: 'pro', status: 'active',
+        razorpay_customer_id: response.razorpay_payment_id,
+        updated_at: new Date().toISOString()
+      }).eq('id', _supaUser.id);
+      _userProfile = Object.assign({}, _userProfile, { tier: 'pro', status: 'active' });
+      closeUpgradeModal();
+      updateTierBadge();
+      showCloudSaveToast('Welcome to Pro! All features unlocked. ✓');
+    },
+    prefill: { email: _supaUser ? _supaUser.email : '' },
+    theme: { color: '#1A3829' }
+  };
+  if (typeof Razorpay !== 'undefined') {
+    var rzp = new Razorpay(options);
+    rzp.open();
+  } else {
+    alert('Payment is loading, please try again in a moment.');
+  }
+}
+
 // ===================== SUPABASE AUTH & CLOUD SAVE =====================
 const SUPA_URL  = 'https://ivsttwvwhtmwnhhvgafp.supabase.co';
 const SUPA_KEY  = 'sb_publishable_hrhLhUw-7eiGfT23wRLtqw_EiTqlFqs';
 
 let _supaClient = null;
 let _supaUser   = null;
-let _userProfile    = null;
 
 function getSupabase() {
   if (!_supaClient) {
@@ -6206,7 +6159,6 @@ async function authSubmit() {
   }
 
   _supaUser = result.data.user;
-  await fetchUserProfile();
   closeAuthModal();
   updateAuthUI();
 }
@@ -6239,7 +6191,6 @@ function updateAuthUI() {
 // --- Cloud save/load ---
 async function cloudSaveProject() {
   if (!_supaUser) { openAuthModal('login'); return; }
-  if (!isPro()) { showUpgradeModal('Saving projects to the cloud requires TerraCost Pro.'); return; }
 
   // A project with no name is unfindable in the panel later — ask for one.
   var nameEl = document.getElementById('projectName');
@@ -6299,8 +6250,6 @@ function showCloudSaveToast(msg) {
 }
 
 function openProjectsPanel() {
-  if (!_supaUser) { openAuthModal('login'); return; }
-  if (!isPro()) { showUpgradeModal('Saving and accessing projects requires TerraCost Pro.'); return; }
   if (!_supaUser) { openAuthModal('login'); return; }
   var panel = document.getElementById('projectsPanel');
   panel.classList.add('open');
@@ -6389,115 +6338,6 @@ async function cloudDeleteProject(id, name) {
 }
 
 // --- Init auth on page load ---
-
-// ── PAYWALL & PROFILE ─────────────────────────────────────────────────────
-async function fetchUserProfile() {
-  if (!_supaUser) return;
-  var sb = getSupabase();
-  var res = await sb.from('profiles').select('*').eq('id', _supaUser.id).single();
-  if (res.data) {
-    _userProfile = res.data;
-  } else {
-    await sb.from('profiles').insert({ id: _supaUser.id, email: _supaUser.email, tier: 'free', status: 'active' });
-    _userProfile = { id: _supaUser.id, email: _supaUser.email, tier: 'free', status: 'active' };
-  }
-  updateTierBadge();
-}
-
-function isPro() {
-  return _userProfile &&
-    (_userProfile.tier === 'pro' || _userProfile.tier === 'business') &&
-    _userProfile.status === 'active';
-}
-
-function updateTierBadge() {
-  var badge = document.getElementById('profileTierBadge');
-  if (!badge) return;
-  badge.textContent = isPro() ? 'PRO' : 'FREE';
-  badge.className = 'tier-badge ' + (isPro() ? 'tier-pro' : 'tier-free');
-}
-
-function showUpgradeModal(reason) {
-  var el = document.getElementById('upgradeReason');
-  if (el) el.textContent = reason || '';
-  var ov = document.getElementById('upgradeOverlay');
-  if (ov) ov.classList.add('open');
-}
-
-function closeUpgradeModal() {
-  var ov = document.getElementById('upgradeOverlay');
-  if (ov) ov.classList.remove('open');
-}
-
-async function startCheckout(plan) {
-  if (!_supaUser) { closeUpgradeModal(); openAuthModal('login'); return; }
-  var amount = plan === 'yearly' ? 495000 : 120000; // paise
-  var options = {
-    key: 'rzp_live_TfV1nW2o5AfJlG',
-    amount: amount,
-    currency: 'INR',
-    name: 'TerraCost Pro',
-    description: plan === 'yearly' ? 'Annual Plan — ₹4,950/yr' : 'Monthly Plan — ₹1,200/mo',
-    handler: async function(response) {
-      var sb = getSupabase();
-      await sb.from('profiles').update({
-        tier: 'pro', status: 'active',
-        razorpay_customer_id: response.razorpay_payment_id,
-        updated_at: new Date().toISOString()
-      }).eq('id', _supaUser.id);
-      _userProfile = Object.assign({}, _userProfile, { tier: 'pro', status: 'active' });
-      closeUpgradeModal();
-      updateTierBadge();
-      showCloudSaveToast('Welcome to Pro! All features unlocked. ✓');
-    },
-    prefill: { email: _supaUser ? _supaUser.email : '' },
-    theme: { color: '#1A3829' }
-  };
-  if (typeof Razorpay !== 'undefined') {
-    var rzp = new Razorpay(options);
-    rzp.open();
-  } else {
-    alert('Payment is loading, please try again in a moment.');
-  }
-}
-
-function openProfilePanel() {
-  if (!_supaUser) { openAuthModal('login'); return; }
-  var p = _userProfile || {};
-  var g = function(id) { return document.getElementById(id); };
-  if (g('pfFullName'))    g('pfFullName').value    = p.full_name || '';
-  if (g('pfCompany'))     g('pfCompany').value     = p.company_name || '';
-  if (g('pfPhone'))       g('pfPhone').value       = p.phone || '';
-  if (g('pfGSTIN'))       g('pfGSTIN').value       = p.gstin_vat_number || '';
-  if (g('pfHeader'))      g('pfHeader').value      = p.custom_header_text || '';
-  if (g('pfFooter'))      g('pfFooter').value      = p.custom_footer_text || '';
-  updateTierBadge();
-  var ov = document.getElementById('profileOverlay');
-  if (ov) ov.classList.add('open');
-}
-
-function closeProfilePanel() {
-  var ov = document.getElementById('profileOverlay');
-  if (ov) ov.classList.remove('open');
-}
-
-async function saveProfile() {
-  if (!_supaUser) return;
-  var g = function(id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; };
-  var updates = {
-    full_name: g('pfFullName'), company_name: g('pfCompany'),
-    phone: g('pfPhone'), gstin_vat_number: g('pfGSTIN'),
-    custom_header_text: g('pfHeader'), custom_footer_text: g('pfFooter'),
-    updated_at: new Date().toISOString()
-  };
-  var sb = getSupabase();
-  var res = await sb.from('profiles').update(updates).eq('id', _supaUser.id);
-  if (res.error) { alert('Save failed: ' + res.error.message); return; }
-  _userProfile = Object.assign({}, _userProfile, updates);
-  closeProfilePanel();
-  showCloudSaveToast('Profile saved ✓');
-}
-
 async function initSupaAuth() {
   try {
     console.log('TerraCost');
@@ -6509,7 +6349,6 @@ async function initSupaAuth() {
     var sessionRes = await sb.auth.getSession();
     if (sessionRes.data && sessionRes.data.session && sessionRes.data.session.user) {
       _supaUser = sessionRes.data.session.user;
-      await fetchUserProfile();
     }
 
     // The stored project id may belong to a different account, or to a row that
@@ -6733,6 +6572,50 @@ if (document.readyState === 'loading') {
   </div>
 </div>
 
+
+
+<div class="tc-overlay" id="upgradeOverlay">
+  <div class="tc-modal">
+    <h2>Upgrade to TerraCost Pro</h2>
+    <p class="upgrade-reason" id="upgradeReason"></p>
+    <ul class="upgrade-features">
+      <li>Cloud save &amp; project history</li>
+      <li>Excel (.xlsx) export</li>
+      <li>Custom header, footer &amp; logo on PDFs</li>
+      <li>Full plant library access</li>
+    </ul>
+    <div class="upgrade-plans">
+      <div class="upgrade-plan" onclick="startCheckout('monthly')">
+        <div class="plan-name">Monthly</div>
+        <div class="plan-price">&#8377;1,200</div>
+        <div class="plan-desc">per month</div>
+      </div>
+      <div class="upgrade-plan featured" onclick="startCheckout('yearly')">
+        <div class="plan-name">Annual &#9733;</div>
+        <div class="plan-price">&#8377;4,950</div>
+        <div class="plan-desc">per year &mdash; ₹11,950 after 500 users</div>
+      </div>
+    </div>
+    <p style="font-size:11px;color:#A8A098;text-align:center;margin:4px 0 8px;">Founding price — locked for life for the first 500 users.</p>
+    <button class="tc-close-btn" onclick="closeUpgradeModal()">Maybe later</button>
+  </div>
+</div>
+
+<!-- Profile Panel -->
+<div class="tc-overlay" id="profileOverlay">
+  <div class="tc-modal">
+    <h2>Your Profile</h2>
+    <span class="tier-badge tier-free" id="profileTierBadge">FREE</span>
+    <div class="profile-field"><label>Full Name</label><input type="text" id="pfFullName" placeholder="Your name"></div>
+    <div class="profile-field"><label>Company Name</label><input type="text" id="pfCompany" placeholder="Zenyard Studio"></div>
+    <div class="profile-field"><label>Phone</label><input type="text" id="pfPhone" placeholder="+91 98765 43210"></div>
+    <div class="profile-field"><label>GSTIN</label><input type="text" id="pfGSTIN" placeholder="22AAAAA0000A1Z5"></div>
+    <div class="profile-field"><label>PDF Header Text (Pro)</label><input type="text" id="pfHeader" placeholder="Company name &amp; tagline on exports"></div>
+    <div class="profile-field"><label>PDF Footer Text (Pro)</label><input type="text" id="pfFooter" placeholder="Contact info on exports"></div>
+    <button class="profile-save" onclick="saveProfile()">Save Profile</button>
+    <button class="tc-close-btn" onclick="closeProfilePanel()">Close</button>
+  </div>
+</div>
 
 
 <!-- Razorpay -->
