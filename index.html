@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
   <meta charset="UTF-8" />
   <title>TerraCost — Landscape BOQ &amp; Proposal Builder</title>
   <!-- Supabase: deferred so it doesn't block first paint -->
@@ -256,6 +257,12 @@
       width: 36px;
     }
 
+    .rate-mem-hint {
+      font-size: 10px;
+      color: #265C3C;
+      margin-top: 3px;
+      white-space: nowrap;
+    }
     .notes-inp {
       width: 100% !important;
       margin-top: 3px !important;
@@ -386,12 +393,14 @@
     }
 
     /* ── Responsive ──────────────────────────────────── */
+    .tbl-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
     @media (max-width: 700px) {
       .grid-2, .grid-3 { grid-template-columns: 1fr; }
       h1 { padding: 18px 16px; font-size: 17px; }
       #topBar { padding: 10px 16px; flex-direction: column; align-items: flex-start; }
       th, td { font-size: 11px; padding: 5px 5px; }
-      td.serial { display: none; }
+      td.serial, th.serial { display: none; }
+      .tbl-scroll table { min-width: 720px; }
       .info-block, #zonesContainer, .actions, hr,
       .container > label, .container > textarea,
       .container > br, .container > button {
@@ -1184,6 +1193,13 @@
   .app-footer-links a:hover { color: #A87118; text-decoration: underline; }
   .app-footer-legal { font-size: 11px; opacity: .8; }
 
+    /* ── Phone spacing pass: give tables the screen width ── */
+    @media (max-width: 700px) {
+      .acc-section { margin-left: 8px !important; margin-right: 8px !important; }
+      .acc-body { padding-left: 10px !important; padding-right: 10px !important; }
+      #zonesContainer { margin-left: 0 !important; margin-right: 0 !important; }
+      .zone-block { padding-left: 10px !important; padding-right: 10px !important; }
+    }
   </style>
 </head>
 <body>
@@ -1260,6 +1276,8 @@
   <div id="topBar">
     <div id="currencyBar">
       <span style="font-size:12px;color:var(--stone-lt);font-weight:500;">&#8377; INR &nbsp;·&nbsp; GST per item</span>
+      <select id="unitSystem" onchange="setUnitSystem(this.value)" title="Units for this BOQ" style="width:auto;margin:0 0 0 8px;font-size:12px;padding:3px 6px;">
+        <option value="mixed">Units: sqft (Indian practice)</option><option value="metric">Units: metric (sqm · rmt · cum)</option></select>
     </div>
     <div id="docActions">
       <button class="smallbtn" onclick="saveNow()">&#128190; Save</button>
@@ -1327,13 +1345,17 @@
     </div>
     <div class="acc-body" id="acc-body-charges">
       <div class="grid-2">
-        <div><label>Design Charges (<span class="csym">&#8377;</span>):</label><input type="number" id="designCharges" value="0" min="0" oninput="updateTotals()"></div>
-        <div><label>Labour / Install Charges (<span class="csym">&#8377;</span>):</label><input type="number" id="labourCharges" value="0" min="0" oninput="updateTotals()"></div>
-        <div><label>Transport Charges (<span class="csym">&#8377;</span>):</label><input type="number" id="transportCharges" value="0" min="0" oninput="updateTotals()"></div>
+        <div><label>Design Charges (<span class="csym">&#8377;</span>):</label><input type="number" id="designCharges" value="0" min="0" oninput="updateTotals()"><select id="designGst" onchange="updateTotals()" title="GST on this charge" style="width:auto;margin:4px 0 0;font-size:12px;"><option value="18">+ GST 18%</option><option value="12">+ GST 12%</option><option value="5">+ GST 5%</option><option value="0">No GST</option></select></div>
+        <div><label>Labour / Install Charges (<span class="csym">&#8377;</span>):</label><input type="number" id="labourCharges" value="0" min="0" oninput="updateTotals()"><select id="labourGst" onchange="updateTotals()" title="GST on this charge" style="width:auto;margin:4px 0 0;font-size:12px;"><option value="18">+ GST 18%</option><option value="12">+ GST 12%</option><option value="5">+ GST 5%</option><option value="0">No GST</option></select></div>
+        <div><label>Transport Charges (<span class="csym">&#8377;</span>):</label><input type="number" id="transportCharges" value="0" min="0" oninput="updateTotals()"><select id="transportGst" onchange="updateTotals()" title="GST on this charge" style="width:auto;margin:4px 0 0;font-size:12px;"><option value="18">+ GST 18%</option><option value="12">+ GST 12%</option><option value="5">+ GST 5%</option><option value="0">No GST</option></select></div>
         <div id="taxPercentRow" style="display:none;"><input type="number" id="taxPercent" value="0" min="0" max="100"></div>
+        <div style="grid-column:1/-1;font-size:11.5px;color:#7E786F;background:#F7F4EF;border-radius:6px;padding:8px 10px;line-height:1.5;">
+          <strong style="color:#5C4626;">GST note:</strong> plants are 0% when supplied as goods. If you supply <em>and</em> plant under one contract,
+          it may be treated as a works contract at 18% — confirm with your CA. You can change any line's GST% in its row.
+        </div>
         <div id="discountRow">
           <label style="display:flex;align-items:center;gap:8px;">
-            Discount on Gross Total (%):
+            Discount before GST (%):
             <button type="button" onclick="toggleDiscountField()" title="Hide this field"
               style="font-size:11px;padding:1px 8px;background:#B03A3A;color:#fff;border:none;border-radius:3px;cursor:pointer;font-weight:500;">
               ✕ Hide
@@ -1514,8 +1536,8 @@
 <script>
 (function() {
   var host = window.location.hostname;
-  var allowed = ['app.terracost.io', 'app.terracost.in', 'terracost.io', 'www.terracost.io', 'terracost.in', 'www.terracost.in', 'terra-cost-india.vercel.app', 'terracostgulf.netlify.app', 'terracostindia.netlify.app', 'terracost.netlify.app', 'terraos.netlify.app', 'localhost', '127.0.0.1', ''];
-  if (!allowed.includes(host)) {
+  var allowed = ['ind.terracost.io', 'app.terracost.io', 'app.terracost.in', 'terracost.io', 'www.terracost.io', 'terracost.in', 'www.terracost.in', 'terra-cost-india.vercel.app', 'terracostgulf.netlify.app', 'terracostindia.netlify.app', 'terracost.netlify.app', 'terraos.netlify.app', 'localhost', '127.0.0.1', ''];
+  if (!allowed.includes(host) && !host.endsWith('.terracost.io') && !host.endsWith('.terracost.in')) {
     // Immediately stop all rendering
     document.documentElement.innerHTML = '<html><head><style>*{margin:0;padding:0;box-sizing:border-box;}html,body{width:100%;height:100%;background:#0D2B1E;overflow:hidden;}body{display:flex;align-items:center;justify-content:center;font-family:sans-serif;}</style></head><body><div style="text-align:center;color:#fff;padding:32px;max-width:400px;"><div style="font-size:30px;font-weight:700;color:#A8711E;margin-bottom:14px;">TerraCost</div><p style="opacity:.65;font-size:14px;line-height:1.8;">Open TerraCost at the link below.<br><br>Visit:</p><br><a href="https://app.terracost.io" style="color:#A8711E;font-weight:700;font-size:16px;">app.terracost.io</a></div></body></html>';
     throw new Error('x');
@@ -1547,7 +1569,7 @@ function addMappedScope(zi,name){
     zones[zi].scopes.push({
       name:name,
       items:template.map(function(x){
-        var memRate=getRateMem('INR',x.desc);
+        var memRate=_memRateIn('INR', x.desc, x.unit);
         var rate=memRate!==null&&memRate>0?memRate:(x.rate||0);
         var gstRate=x.gst!==undefined?x.gst:(x.taxable?18:0);
         return{desc:x.desc,unit:x.unit||'nos',qty:0,rate:rate,notes:'',details:[],hsn:'',unit_other:'',taxable:gstRate>0||x.taxable||false,gstRate:gstRate};
@@ -1678,6 +1700,15 @@ const SCOPE_DATA = {
     {desc:'Pit Digging for Plantation',        unit:'nos',  rate:50,   gst:18, taxable:true},
     {desc:'Topsoil / Garden Soil Supply',      unit:'bag',  rate:350,  gst:5,  taxable:true},
     {desc:'Mulching (wood bark chips)',         unit:'bag',  rate:800,  gst:5,  taxable:true},
+    {desc:'Red Earth (supply & spread)',        unit:'cum',  rate:0,    gst:5,  taxable:true},
+    {desc:'Farm Yard Manure (FYM)',             unit:'cum',  rate:0,    gst:5,  taxable:true},
+    {desc:'River Sand / M-Sand',                unit:'cum',  rate:0,    gst:5,  taxable:true},
+    {desc:'40mm Aggregate (jelly)',              unit:'cum', rate:0,    gst:5,  taxable:true},
+    {desc:'Weed Control Membrane / Geotextile', unit:'sqm',  rate:0,    gst:18, taxable:true},
+    {desc:'Anti-termite Treatment',             unit:'sqm',  rate:0,    gst:18, taxable:true},
+    {desc:'Mobilisation & Site Setup',          unit:'LS',   rate:0,    gst:18, taxable:true},
+    {desc:'Water & Power for Works',            unit:'LS',   rate:0,    gst:18, taxable:true},
+    {desc:'Site Cleaning on Completion',        unit:'LS',   rate:0,    gst:18, taxable:true},
   ],
   'Softscape — Trees': [
     {desc:'Pongamia pinnata (Honge)',          unit:'nos', rate:850,  gst:0, taxable:false, lScale:['L1']},
@@ -1733,6 +1764,14 @@ const SCOPE_DATA = {
     {desc:'Main Line, Valves & Controller',   unit:'rmt',  rate:480, gst:18,taxable:true},
     {desc:'Drip Emitters & Distribution Lines',         unit:'nos',  rate:25,  gst:18,taxable:true},
     {desc:'Rain Sensor / Moisture Controller',unit:'nos',  rate:8500,gst:18,taxable:true},
+    {desc:'HDPE Pipe 16mm (lateral)',           unit:'rmt',  rate:0,   gst:18, taxable:true},
+    {desc:'HDPE Pipe 20mm',                     unit:'rmt',  rate:0,   gst:18, taxable:true},
+    {desc:'HDPE Pipe 32mm (sub-main)',          unit:'rmt',  rate:0,   gst:18, taxable:true},
+    {desc:'HDPE Pipe 50mm (main)',              unit:'rmt',  rate:0,   gst:18, taxable:true},
+    {desc:'Solenoid / Ball Valve',              unit:'nos',  rate:0,   gst:18, taxable:true},
+    {desc:'Irrigation Pump (with control panel)', unit:'nos', rate:0,  gst:18, taxable:true},
+    {desc:'Screen / Disc Filter',               unit:'nos',  rate:0,   gst:18, taxable:true},
+    {desc:'Trenching & Backfilling for Pipes',  unit:'rmt',  rate:0,   gst:18, taxable:true},
   ],
   'Hardscape — Paving': [
     {desc:'Granite Paving (supply & lay)',    unit:'sqft', rate:180, gst:18,taxable:true},
@@ -1758,6 +1797,9 @@ const SCOPE_DATA = {
     {desc:'Uplights / Spotlights (LED)',      unit:'nos',  rate:4500,gst:18,taxable:true},
     {desc:'LED Strip Lighting',               unit:'rmt',  rate:650, gst:18,taxable:true},
     {desc:'Tree Wash / Feature Lights',       unit:'nos',  rate:5500,gst:18,taxable:true},
+    {desc:'Armoured Cable (underground, per m)', unit:'rmt', rate:0,   gst:18, taxable:true},
+    {desc:'Lighting Distribution Board & Timer', unit:'nos', rate:0,   gst:18, taxable:true},
+    {desc:'Earthing Station (plate / chemical)', unit:'nos', rate:0,   gst:18, taxable:true},
   ],
   'Fencing & Gates': [
     {desc:'MS Fencing (powder coated)',       unit:'rmt',  rate:1800,gst:18,taxable:true},
@@ -2101,6 +2143,7 @@ function unitOptionsByLine(desc) {
   desc = (desc||"").toLowerCase();
   if (desc.includes('sprinkler')||desc.includes('drip')) return ["sqm","sqft","nos","other"];
   if (desc.includes('turf')||desc.includes('grass')) return ["sqm","sqft","smt","other"];
+  if (desc.includes('earthing')) return ["nos","set","other"];
   if (desc.includes('soil')||desc.includes('earth')||desc.includes('mulch')||desc.includes('compost'))
     return ["cum","tonne","kg","bag","load","cft","litre","other"];
   if (desc.includes('tree')||desc.includes('plant')||desc.includes('shrub')||desc.includes('perennial'))
@@ -2112,7 +2155,7 @@ function unitOptionsByLine(desc) {
     return ["rmt","m","ft","rft","other"];
   if (desc.includes('pipe')||desc.includes('line')||desc.includes('main')) return ["rmt","m","ft","rft","other"];
   if (desc.includes('pergola')||desc.includes('gazebo')||desc.includes('structure')) return ["sqm","sqft","other"];
-  return ["nos","sqm","sqft","cum","other"];
+  return ["nos","sqm","sqft","rmt","cum","LS","other"];
 }
 
 let zones = [];
@@ -2120,9 +2163,12 @@ let openDetails = {};
 
 // ===================== SAVE / LOAD =====================
 let saveTimer = null;
+function _flushSave() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; try { saveState(); } catch(e) {} } }
+window.addEventListener('pagehide', _flushSave);
+document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'hidden') _flushSave(); });
 function scheduleSave() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(saveState, 700);
+  saveTimer = setTimeout(function(){ saveTimer = null; saveState(); }, 700);
 }
 
 function getState() {
@@ -2132,13 +2178,13 @@ function getState() {
                       'startDate','endDate'];
   const meta = {};
   metaFields.forEach(id => { const el=document.getElementById(id); if(el) meta[id]=el.value; });
-  const chargeFields = ['designCharges','labourCharges','transportCharges','taxPercent','discountPercent','provisionalPercent','referralPercent'];
+  const chargeFields = ['designCharges','labourCharges','transportCharges','taxPercent','discountPercent','provisionalPercent','referralPercent','designGst','labourGst','transportGst'];
   const charges = {};
   chargeFields.forEach(id => { const el=document.getElementById(id); if(el) charges[id]=el.value; });
   const refSEl = document.getElementById('referralEnabled'); if(refSEl) charges.referralEnabled = refSEl.checked;
   return {
     _v: 5,
-    meta, currencyCode: currency.code, zones, charges,
+    meta, currencyCode: currency.code, zones, charges, unitSystem,
     maint: {
       months:  document.getElementById('maintMonths')?.value||12,
       items:   JSON.parse(JSON.stringify(maintItems)),
@@ -2241,9 +2287,11 @@ function loadState() {
       }
     }
     openDetails = {};
-    const chargeFields = ['designCharges','labourCharges','transportCharges','taxPercent','discountPercent','provisionalPercent','referralPercent'];
+    const chargeFields = ['designCharges','labourCharges','transportCharges','taxPercent','discountPercent','provisionalPercent','referralPercent','designGst','labourGst','transportGst'];
     chargeFields.forEach(id => { const el=document.getElementById(id); if(el&&s.charges&&s.charges[id]!==undefined) el.value=s.charges[id]; });
     const refLEl = document.getElementById('referralEnabled'); if(refLEl && s.charges && s.charges.referralEnabled !== undefined) refLEl.checked = s.charges.referralEnabled;
+    unitSystem = s.unitSystem === 'metric' ? 'metric' : 'mixed';
+    const usEl = document.getElementById('unitSystem'); if (usEl) usEl.value = unitSystem;
     if (s.maint) {
       const mn=document.getElementById('maintMonths'); if(mn&&s.maint.months) mn.value=s.maint.months;
       if (Array.isArray(s.maint.items)) {
@@ -2284,7 +2332,7 @@ function readImport(input) {
       if (!s.zones||!s.meta) { alert('Invalid BOQ file.'); return; }
       if (!confirm('Load this BOQ? Current data will be replaced.')) return;
       localStorage.setItem('boq_india_v1', JSON.stringify(s));
-      location.reload();
+      clearTimeout(saveTimer); saveTimer = null; location.reload();
     } catch(err) { alert('Could not read file: '+err.message); }
   };
   reader.readAsText(file);
@@ -2336,22 +2384,118 @@ function addZone() {
   zones.push({ id:'zone_'+idx, name:'Zone '+idx, scopes:[] });
   renderZones(); updateTotals();
 }
-function removeZone(idx) { if(idx===0) return; zones.splice(idx,1); renderZones(); updateTotals(); }
+function removeZone(idx) {
+  if(idx===0) return;
+  const z = zones[idx];
+  if (z && z.scopes.length && !confirm('Delete zone "' + (z.name||'') + '" and everything in it?')) return;
+  zones.splice(idx,1); renderZones(); updateTotals();
+}
 
 // ===================== RATE MEMORY =====================
+// Loose key: ignores case, spacing and punctuation ("Areca Palm · 7–10 ft" == "areca palm 7-10ft")
+function _escAttr(v) {
+  return String(v==null?'':v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function _rmNorm(desc) {
+  return String(desc||'').toLowerCase().replace(/[^a-z0-9]+/g,'').trim();
+}
 function getRateMem(code, desc) {
   try {
-    const v = localStorage.getItem('rl:'+code+':'+(desc||'').toLowerCase().trim());
+    var n = _rmNorm(desc);
+    var v = n ? localStorage.getItem('rln:'+code+':'+n) : null;           // new loose key (always latest)
+    if (v === null) v = localStorage.getItem('rl:'+code+':'+(desc||'').toLowerCase().trim()); // legacy exact key
     return v !== null ? parseFloat(v) : null;
   } catch(e) { return null; }
 }
-function setRateMem(code, desc, rate) {
+function getRateMemUnit(code, desc) {
+  try { var n = _rmNorm(desc); return n ? localStorage.getItem('rlu:'+code+':'+n) : null; } catch(e) { return null; }
+}
+// Remembered rate expressed in the library unit (e.g. a rate saved per sqm, re-used on a sqft template)
+function _memRateIn(code, desc, unit) {
+  var r = getRateMem(code, desc); if (r === null) return null;
+  var mu = getRateMemUnit(code, desc);
+  if (!mu || !unit || mu === unit) return r;
+  for (var k in _TO_METRIC) {
+    var m = _TO_METRIC[k];
+    if (k === unit && m[0] === mu) return Math.round(r * m[1] * 10000) / 10000;   // saved per sqm, library sqft
+    if (m[0] === unit && k === mu) return Math.round(r / m[1] * 10000) / 10000;   // saved per sqft, library sqm
+  }
+  return r;
+}
+function getRateMemDate(code, desc) {
+  try { var n = _rmNorm(desc); return n ? localStorage.getItem('rld:'+code+':'+n) : null; } catch(e) { return null; }
+}
+// when (optional ISO date): used when seeding from saved projects — older data never overwrites newer rates
+function setRateMem(code, desc, rate, when) {
+  rate = parseFloat(rate);
   if (!desc || !rate || rate <= 0) return;
-  try { localStorage.setItem('rl:'+code+':'+(desc||'').toLowerCase().trim(), rate); } catch(e) {}
+  try {
+    var n  = _rmNorm(desc);
+    var ts = new Date(when || Date.now()).toISOString();
+    if (when && n) {
+      var prev = localStorage.getItem('rld:'+code+':'+n);
+      if (prev && prev > ts) return;
+    }
+    localStorage.setItem('rl:'+code+':'+(desc||'').toLowerCase().trim(), rate);
+    if (n) {
+      localStorage.setItem('rln:'+code+':'+n, rate);
+      localStorage.setItem('rld:'+code+':'+n, ts);
+    }
+  } catch(e) {}
+}
+// Rebuild rate memory from a saved project's data (items + sub-items)
+function seedRateMemFromState(st, when) {
+  try {
+    if (!st || !Array.isArray(st.zones)) return;
+    st.zones.forEach(function(z){
+      (z && z.scopes || []).forEach(function(sc){
+        (sc && sc.items || []).forEach(function(it){
+          if (!it) return;
+          if (Array.isArray(it.details) && it.details.length) {
+            it.details.forEach(function(d){ if (d) setRateMem('INR', d.name, d.rate, when); });
+          } else {
+            setRateMem('INR', it.desc, it.rate, when);
+          }
+        });
+      });
+    });
+  } catch(e) { console.warn('Rate memory seed skipped:', e); }
+}
+var _rateMemSeeded = false;
+async function seedRateMemFromCloud() {
+  if (_rateMemSeeded || !_supaUser) return;
+  _rateMemSeeded = true;
+  try {
+    var sb = getSupabase();
+    var res = await sb.from('projects')
+      .select('data, updated_at, created_at')
+      .eq('user_id', _supaUser.id)
+      .eq('region', 'IN')
+      .order('updated_at', { ascending: true })
+      .limit(50);
+    if (res.error || !res.data) { _rateMemSeeded = false; return; }
+    res.data.forEach(function(p){ seedRateMemFromState(p.data, p.updated_at || p.created_at); });
+  } catch(e) { _rateMemSeeded = false; console.warn('Rate memory cloud seed skipped:', e); }
+}
+// Small "your rate · 12 Sep" label when the rate shown came from the user's own memory
+function rateMemHint(item, isDetail) {
+  try {
+    if (isDetail || !item || !(item.rate > 0)) return '';
+    var mem = getRateMem('INR', item.desc);
+    var dt  = getRateMemDate('INR', item.desc);
+    if (mem === null || !dt || Math.abs(mem - item.rate) > 0.0001) return '';
+    var d = new Date(dt);
+    if (isNaN(d)) return '';
+    return '<div class="rate-mem-hint" title="Remembered from your earlier projects">your rate · ' +
+      d.getDate() + ' ' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + '</div>';
+  } catch(e) { return ''; }
 }
 function saveItemRate(zi,si,ii) {
   const item = zones[zi].scopes[si].items[ii];
-  if (item.desc && item.rate > 0) setRateMem('INR', item.desc, item.rate);
+  if (item.desc && item.rate > 0) {
+    setRateMem('INR', item.desc, item.rate);
+    try { var n=_rmNorm(item.desc); if (n && item.unit && item.unit!=='other') localStorage.setItem('rlu:INR:'+n, item.unit); } catch(e) {}
+  }
 }
 
 function addScope(zi) {
@@ -2372,7 +2516,7 @@ function addScope(zi) {
     zones[zi].scopes.push({
       name,
       items: template.map(x=>{
-        const memRate = getRateMem('INR', x.desc);
+        const memRate = _memRateIn('INR', x.desc, x.unit);
         const rate    = memRate !== null && memRate > 0 ? memRate : (x.rate || 0);
         const gstRate = x.gst !== undefined ? x.gst : (x.taxable ? 18 : 0);
         return {
@@ -2393,13 +2537,21 @@ function addCustomScopeTemplate() {
   alert('Scope "'+name+'" created. Add it inside any Zone via the Scope dropdown.');
   renderZones();
 }
-function removeScope(zi,si) { zones[zi].scopes.splice(si,1); renderZones(); updateTotals(); }
+function removeScope(zi,si) {
+  const sc = zones[zi].scopes[si];
+  if (sc && sc.items.length && !confirm('Remove "' + sc.name + '" and its ' + sc.items.length + ' line item(s)?')) return;
+  zones[zi].scopes.splice(si,1); renderZones(); updateTotals();
+}
 
 function updateItem(zi,si,ii,what,value) {
   const item = zones[zi].scopes[si].items[ii];
-  if(item.details.length) return;
-  if(what==='qty') item.qty=parseFloat(value)||0;
-  if(what==='rate') { item.rate=parseFloat(value)||0; saveItemRate(zi,si,ii); }
+  if(item.details.length) {
+    // Composite line: rate comes from sub-items, but the number of sets is the user's
+    if(what==='qty') { item.qty=Math.max(0, parseFloat(value)||0); updateTotals(); }
+    return;
+  }
+  if(what==='qty') item.qty=Math.max(0, parseFloat(value)||0);
+  if(what==='rate') { item.rate=Math.max(0, parseFloat(value)||0); saveItemRate(zi,si,ii); }
   updateTotals();
 }
 function updateField(zi,si,ii,field,value) {
@@ -2457,8 +2609,9 @@ function deleteDetailRow(zi,si,ii,subi) {
 }
 function updateDetailField(zi,si,ii,subi,field,value) {
   const det=zones[zi].scopes[si].items[ii].details[subi];
-  if(field==='qty'||field==='rate') det[field]=parseFloat(value)||0;
+  if(field==='qty'||field==='rate') det[field]=Math.max(0, parseFloat(value)||0);
   else det[field]=value;
+  if(field==='rate' && det.name) setRateMem('INR', det.name, det.rate);
   updateDetailTotal(zi,si,ii);
 }
 function updateDetailUnit(zi,si,ii,subi,value) {
@@ -2487,6 +2640,57 @@ function setRateOf(item){
 }
 
 // Derived tax label for a line: 'No' | 'Yes' | 'Mixed'
+// GST % shown to the client (India): single rate, or 'Mixed' for composite lines with different rates
+function lineGstPctLabel(item){
+  const subs=(item.details||[]).filter(s=>s.gstRate!==undefined);
+  if(subs.length){
+    const rates=[...new Set(subs.map(s=>+s.gstRate||0))];
+    return rates.length===1 ? rates[0]+'%' : 'Mixed';
+  }
+  const gr=item.gstRate!==undefined?item.gstRate:(item.taxable?18:0);
+  return (+gr||0)+'%';
+}
+const _SPEC_PLANT_SCOPES = ['Softscape — Trees','Softscape — Shrubs & Groundcovers','Plantation & Avenue Trees','Partitions & Screening'];
+function _specHint(scopeName, desc){
+  if (scopeName==='Softscape — Trees' || scopeName==='Plantation & Avenue Trees') return 'Size: height, girth, bag size — e.g. 3–3.5 m ht, 50 mm girth, 18" bag';
+  if (scopeName==='Softscape — Shrubs & Groundcovers') return 'Size: height and bag size — e.g. 1.5 ft ht, 8" bag';
+  return 'Spec / notes (optional)';
+}
+// Final BOQs state plant sizes; warn once per session before exporting if some are missing
+let _specWarned = false;
+function checkPlantSpecsBeforeExport(){
+  if (_specWarned) return true;
+  let n = 0;
+  zones.forEach(z=>z.scopes.forEach(sc=>{ if(!_SPEC_PLANT_SCOPES.includes(sc.name)) return;
+    sc.items.forEach(it=>{ if((it.qty||0)>0 && !(it.details&&it.details.length) && !String(it.notes||'').trim()) n++; }); }));
+  if (!n) return true;
+  _specWarned = true;
+  return confirm(n + ' plant item(s) have no size or spec.\n\nFinal BOQs usually state height, girth and bag size so the client knows exactly what is supplied.\n\nExport anyway?');
+}
+// ---- Unit system: 'mixed' (library as-is, sqft for paving/turf) or 'metric' (sqm · rmt · cum)
+const _TO_METRIC = { sqft:['sqm',0.09290304], rft:['rmt',0.3048], ft:['m',0.3048], cft:['cum',0.028316846592] };
+let unitSystem = 'mixed';
+function _metricItem(o){
+  const m = _TO_METRIC[o.unit]; if (!m) return false;
+  o.unit = m[0];
+  o.qty  = Math.round((+o.qty||0) * m[1] * 1000) / 1000;
+  o.rate = Math.round((+o.rate||0) / m[1] * 100) / 100;
+  return true;
+}
+function _applyMetric(){
+  if (unitSystem !== 'metric') return;
+  zones.forEach(z=>z.scopes.forEach(sc=>sc.items.forEach(it=>{
+    _metricItem(it);
+    (it.details||[]).forEach(d=>_metricItem(d));
+    if (it.details && it.details.length) it.rate = +it.details.reduce((t,d)=>t+(+d.qty||0)*(+d.rate||0),0).toFixed(2);
+  })));
+}
+function setUnitSystem(v){
+  if (v === 'metric' && !confirm('Convert every sqft / rft / cft line in this BOQ to sqm / rmt / cum?\n\nQuantities and rates are converted together (quantities to 3 decimals), so line totals stay the same apart from small rounding. New items will also be added in metric.')) {
+    document.getElementById('unitSystem').value = unitSystem; return;
+  }
+  unitSystem = v; renderZones(); scheduleSave();
+}
 function lineTaxLabel(item){
   const subs=(item.details||[]).filter(s=>s.gstRate!==undefined);
   if(subs.length){
@@ -2505,6 +2709,7 @@ function setComplimentary(zi,si,ii,val){
 
 // ===================== RENDER ZONES =====================
 function renderZones() {
+  _applyMetric();
   updateProjectTypeLock();
   const zc = document.getElementById('zonesContainer');
   zc.innerHTML = '';
@@ -2522,7 +2727,7 @@ function renderZones() {
     if (isPW) {
       html += `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
         <span class="zone-pw-label">Project-wide</span>
-        <input type="text" value="${zone.name}" onchange="zones[${zi}].name=this.value;scheduleSave();"
+        <input type="text" value="${_escAttr(zone.name)}" onchange="zones[${zi}].name=this.value;scheduleSave();"
           style="flex:1;min-width:140px;margin:0;" placeholder="Project-wide">
       </div>
       <div class="actions" style="margin-bottom:10px;">
@@ -2531,7 +2736,7 @@ function renderZones() {
       </div>`;
     } else {
       html += `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#F7F4EF;border-radius:8px;cursor:pointer;border:1px solid #E8E3DA;" onclick="toggleZone('${zone.id}')">
-        <span style="font-weight:600;color:#1A3829;flex:1;">${zone.name}</span>
+        <span style="font-weight:600;color:#1A3829;flex:1;">${_escAttr(zone.name)}</span>
         <span style="font-size:11px;color:#7E786F;">${zoneHint}</span>
         <span style="font-size:18px;color:#5C4626;transition:transform .2s;display:inline-block;transform:rotate(${isOpen?'90':'0'}deg);">›</span>
         <button type="button" class="secondary smallbtn" onclick="event.stopPropagation();removeZone(${zi})" style="background:#B03A3A;color:#fff;border:none;padding:3px 8px;border-radius:4px;font-size:11px;">✕</button>
@@ -2540,7 +2745,7 @@ function renderZones() {
         html += `<div style="padding:10px 4px 0;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
           <label style="margin:0;font-size:12px;color:#7E786F;">Zone name:</label>
-          <input type="text" value="${zone.name}" onchange="zones[${zi}].name=this.value;scheduleSave();renderZones();" style="flex:1;margin:0;font-size:13px;">
+          <input type="text" value="${_escAttr(zone.name)}" onchange="zones[${zi}].name=this.value;scheduleSave();renderZones();" style="flex:1;margin:0;font-size:13px;">
         </div>
         <div class="actions" style="margin-bottom:10px;">
           <button type="button" class="secondary smallbtn" onclick="openScopePicker(${zi})"
@@ -2556,13 +2761,13 @@ function renderZones() {
     if (isPW || isOpen) { [...zone.scopes].sort((a,b)=>{ const ai=SCOPE_ORDER.indexOf(a.name),bi=SCOPE_ORDER.indexOf(b.name); return (ai===-1?999:ai)-(bi===-1?999:bi); }).forEach((sc)=>{ const si=zone.scopes.indexOf(sc);
       html += `<div style="margin-bottom:14px;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-          <strong style="color:#5a4020;">${sc.name}</strong>
+          <strong style="color:#5a4020;">${_escAttr(sc.name)}</strong>
           <button type="button" class="rowbtn" onclick="removeScope(${zi},${si})" style="background:#B03A3A;color:#fff;border-color:#B03A3A;">Remove</button>
           ${PICKER_SCOPES.has(sc.name) ? `<button type="button" class="rowbtn" onclick="openItemPicker(${zi},${si})" style="background:#265C3C;color:#fff;border-color:#265C3C;">${['Softscape — Trees','Softscape — Shrubs & Groundcovers','Turf & Lawn','Plantation & Avenue Trees','Potted Plants'].includes(sc.name) ? '+ Select Plants' : '+ Add Work Items'}</button>` : ''}
         </div>
-        <table>
+        <div class="tbl-scroll"><table>
           <thead><tr>
-            <th style="width:40px;">#</th>
+            <th class="serial" style="width:40px;">#</th>
             <th>Description &amp; Spec</th>
             <th>Unit</th>
             <th style="width:68px;">Qty</th>
@@ -2593,7 +2798,7 @@ function renderZones() {
               <input type="text" class="notes-inp"
                 value="${(item.notes||'').replace(/"/g,'&quot;')}"
                 oninput="updateNotes(${zi},${si},${ii},this.value)"
-                placeholder="Spec / notes (optional)">
+                placeholder="${_specHint(sc.name, item.desc).replace(/"/g,'&quot;')}">
             </td>
             <td>
               <select class="unit-inline" onchange="updateUnit(${zi},${si},${ii},this.value)">
@@ -2613,6 +2818,7 @@ function renderZones() {
               <input type="number" min="0" value="${item.rate}" style="width:86px;"
                 onchange="updateItem(${zi},${si},${ii},'rate',this.value)"
                 ${isDetail?'readonly tabindex="-1"':''}>
+              ${rateMemHint(item, isDetail)}
             </td>
             <td>
               <input type="text" style="width:82px;" value="${item.hsn||''}"
@@ -2700,7 +2906,7 @@ function renderZones() {
           <tr><td colspan="9" style="text-align:left;padding:6px 8px;">
             <button type="button" class="secondary smallbtn" onclick="addLineItem(${zi},${si})">+ Add Line Item</button>
           </td></tr>
-          </tbody></table></div>`;
+          </tbody></table></div></div>`;
     }); // end scopes forEach
     } // end if (isPW || isOpen)
 
@@ -2740,29 +2946,48 @@ function getTaxSplitTotals() {
   return {taxableSubtotal:taxable, nonTaxableSubtotal:nonTaxable, gstTotal, byRate};
 }
 
+// Single source of truth for every total (screen, PDF, Excel, sticky bar, telemetry).
+// Compliance: discount is given before tax (reduces taxable value), so GST is charged on the discounted amount.
+// Charges carry their own GST rate; provisional sum carries the works' average GST rate.
+function computeTotals() {
+  const sp    = getTaxSplitTotals();
+  const works = sp.taxableSubtotal + sp.nonTaxableSubtotal;
+  const num   = id => { const el = document.getElementById(id); return el ? (+el.value || 0) : 0; };
+  const gstOf = id => { const el = document.getElementById(id); return el ? (+el.value || 0) : 18; };
+  const design = num('designCharges'), labour = num('labourCharges'), transport = num('transportCharges');
+  const designGst = gstOf('designGst'), labourGst = gstOf('labourGst'), transportGst = gstOf('transportGst');
+  const provP   = num('provisionalPercent');
+  const provAmt = works * provP / 100;
+  const itemGst    = sp.gstTotal;
+  const provGst    = works > 0 ? provAmt * (itemGst / works) : 0;
+  const chargesGst = design*designGst/100 + labour*labourGst/100 + transport*transportGst/100;
+  const preTax        = works + design + labour + transport + provAmt;
+  const taxBeforeDisc = itemGst + chargesGst + provGst;
+  const discP   = Math.min(100, Math.max(0, num('discountPercent')));
+  const discAmt = preTax * discP / 100;
+  const taxAmt  = taxBeforeDisc * (1 - discP/100);
+  const refEn   = document.getElementById('referralEnabled')?.checked || false;
+  const refP    = refEn ? (num('referralPercent') || 10) : 0;
+  const referralAmt = refEn ? (preTax - discAmt + taxAmt) * refP / 100 : 0;
+  const grand   = preTax - discAmt + taxAmt + referralAmt;
+  return { taxableSubtotal:sp.taxableSubtotal, nonTaxableSubtotal:sp.nonTaxableSubtotal, works,
+           design, labour, transport, designGst, labourGst, transportGst, provP, provAmt,
+           itemGst, chargesGst, provGst, preTax, taxBeforeDisc, discP, discAmt, taxAmt,
+           refEn, refP, referralAmt, grand };
+}
+
 function updateTotals() {
   const {taxableSubtotal, nonTaxableSubtotal, gstTotal} = getTaxSplitTotals();
   const worksSubtotal = taxableSubtotal + nonTaxableSubtotal;
 
-  const design    = +document.getElementById('designCharges').value||0;
-  const labour    = +document.getElementById('labourCharges').value||0;
-  const transport = +document.getElementById('transportCharges').value||0;
-  const addTotal  = design+labour+transport;
-
-  const taxAmt = gstTotal;
-
-  const provisionalP = +document.getElementById('provisionalPercent').value||0;
-  const provisionalAmt = worksSubtotal * provisionalP/100;
-
+  const T = computeTotals();
+  const design = T.design, labour = T.labour, transport = T.transport;
+  const taxAmt = T.taxAmt;
+  const provisionalP = T.provP, provisionalAmt = T.provAmt;
   // Referral fee — baked into client rates, shown in your internal total breakdown
-  const referralEnabled = document.getElementById('referralEnabled')?.checked || false;
-  const referralP = referralEnabled ? (+document.getElementById('referralPercent')?.value||10) : 0;
-  const referralAmt = referralEnabled ? (worksSubtotal + addTotal + provisionalAmt + taxAmt) * referralP / 100 : 0;
-
-  const grossBeforeDiscount = worksSubtotal + addTotal + provisionalAmt + taxAmt + referralAmt;
-  const discountP   = +document.getElementById('discountPercent').value||0;
-  const discountAmt = grossBeforeDiscount * discountP/100;
-  const grand       = grossBeforeDiscount - discountAmt;
+  const referralEnabled = T.refEn, referralP = T.refP, referralAmt = T.referralAmt;
+  const discountP = T.discP, discountAmt = T.discAmt;
+  const grand     = T.grand;
 
   const maintMonths  = getContractMonths();
   const maintTotal   = getMaintGrandTotal();
@@ -2771,13 +2996,14 @@ function updateTotals() {
   const s = '₹';
   const rows = [
     ['Works Subtotal',                      s+fmt(worksSubtotal)],
-    design>0    ? ['Design Charges',         s+fmt(design)]    : null,
-    labour>0    ? ['Labour / Install Charges',s+fmt(labour)]   : null,
-    transport>0 ? ['Transport Charges',      s+fmt(transport)] : null,
+    design>0    ? [`Design Charges${T.designGst?' (GST '+T.designGst+'%)':''}`,         s+fmt(design)]    : null,
+    labour>0    ? [`Labour / Install Charges${T.labourGst?' (GST '+T.labourGst+'%)':''}`,s+fmt(labour)]   : null,
+    transport>0 ? [`Transport Charges${T.transportGst?' (GST '+T.transportGst+'%)':''}`,      s+fmt(transport)] : null,
     provisionalP>0 ? [`Provisional Sum @ ${provisionalP}%`, s+fmt(provisionalAmt), 'provrow'] : null,
-    ['GST (per item rates)',                 s+fmt(taxAmt)],
-    referralEnabled && referralAmt>0 ? [`Referral Fee @ ${referralP}% (internal)`, s+fmt(referralAmt), 'referralrow'] : null,
     discountP>0 ? [`Discount @ ${discountP}%`, '-'+s+fmt(discountAmt), 'discrow'] : null,
+    discountP>0 ? ['Taxable value after discount', s+fmt(T.preTax-discountAmt)] : null,
+    ['GST',                                  s+fmt(taxAmt)],
+    referralEnabled && referralAmt>0 ? [`Referral Fee @ ${referralP}% (internal)`, s+fmt(referralAmt), 'referralrow'] : null,
   ].filter(Boolean);
 
   // Cost distribution — where the money actually went
@@ -2812,6 +3038,7 @@ function updateTotals() {
 
 // ===================== EXCEL EXPORT =====================
 function exportExcel() {
+  if (!requirePro(exportExcel)) return;
   try {
   if (typeof XLSX === 'undefined') {
     alert('Excel library not loaded. Check your internet connection and refresh.');
@@ -2836,18 +3063,12 @@ function exportExcel() {
     end:         document.getElementById('endDate').value,
   };
 
-  const {taxableSubtotal, nonTaxableSubtotal, gstTotal:exGst} = getTaxSplitTotals();
-  const worksSub     = taxableSubtotal + nonTaxableSubtotal;
-  const design       = +document.getElementById('designCharges').value||0;
-  const labour       = +document.getElementById('labourCharges').value||0;
-  const transport    = +document.getElementById('transportCharges').value||0;
-  const taxAmt       = exGst;
-  const provP        = +document.getElementById('provisionalPercent').value||0;
-  const provAmt      = worksSub * provP / 100;
-  const discP        = +document.getElementById('discountPercent').value||0;
-  const grossBD      = worksSub + design + labour + transport + provAmt + taxAmt;
-  const discAmt      = grossBD * discP / 100;
-  const grand        = grossBD - discAmt;
+  const T            = computeTotals();
+  const worksSub     = T.works;
+  const design = T.design, labour = T.labour, transport = T.transport;
+  const taxAmt = T.taxAmt, provP = T.provP, provAmt = T.provAmt;
+  const discP  = T.discP,  discAmt = T.discAmt;
+  const grand  = T.grand;
   const maintMths    = getContractMonths();
   const maintTot     = getMaintGrandTotal();
   const maintMo      = getMaintMonthlyEquiv();
@@ -2885,7 +3106,7 @@ function exportExcel() {
   blank();
 
   // ── Zones (including Project-wide at index 0) ─────────────
-  const COL_HEADERS = ['#','Description','Spec / Notes','Unit','Qty','Rate ('+CC+')','Tax Code','Total ('+CC+')','Tax?'];
+  const COL_HEADERS = ['#','Description','Spec / Notes','Unit','Qty','Rate ('+CC+')','Tax Code','Total ('+CC+')','GST %'];
 
   zones.forEach((zone,zi)=>{
     section(zi===0 ? 'PROJECT-WIDE' : 'ZONE '+zi+': '+zone.name);
@@ -2908,7 +3129,7 @@ function exportExcel() {
           zoneTotal  += itemTot;
           R((zi===0?'PW':zi)+'.'+String(serial).padStart(2,'0'),
             itm.desc||'', itm.notes||'', unitLbl,
-            itm.qty||0, itm.rate||0, itm.hsn||'', itemTot, itm.taxable?'Yes':'No');
+            itm.qty||0, itm.rate||0, itm.hsn||'', itemTot, lineGstPctLabel(itm));
           // Sub-items
           (itm.details||[]).forEach(sub=>{
             const subU = sub.unit==='other'?(sub.unit_other||''):sub.unit||'nos';
@@ -2938,8 +3159,10 @@ function exportExcel() {
     labour>0    ? ['Labour / Install Charges',        labour]     : null,
     transport>0 ? ['Transport Charges',               transport]  : null,
     provP>0 ? ['Provisional Sum @ '+provP+'%',        provAmt]  : null,
-    ['GST (per item rates)',                          taxAmt],
     discP>0 ? ['Discount @ '+discP+'%',               -discAmt] : null,
+    discP>0 ? ['Taxable value after discount',        T.preTax-discAmt] : null,
+    ['GST',                                           taxAmt],
+    T.referralAmt>0 ? ['Referral / Coordination Fee @ '+T.refP+'%', T.referralAmt] : null,
     ['GRAND TOTAL',                                   grand],
     maintTot>0 ? ['Maintenance ('+maintMo+' x '+maintMths+' months)', maintTot] : null,
   ].filter(Boolean);
@@ -3012,7 +3235,7 @@ function exportExcel() {
   const slug = (meta.project||'BOQ').replace(/[^a-zA-Z0-9]/g,'_').replace(/__+/g,'_').slice(0,28);
   XLSX.writeFile(wb, `${slug}_Rev${meta.revision||1}_${new Date().toISOString().slice(0,10)}.xlsx`);
   } catch(err) {
-    alert('Excel (XLSX) export error: ' + err.message);
+    alert(/jspdf|ExcelJS|XLSX|not defined|undefined/i.test(err.message||'') ? 'Export tools could not load. Check your internet connection and refresh the page, then try again.' : 'Excel (XLSX) export error: ' + err.message);
     console.error('XLSX export failed:', err);
   }
 }
@@ -3021,9 +3244,10 @@ function exportExcel() {
 function downloadPDF() {
   if (needsLeadCapture()) { gateExport(downloadPDF, 'pdf'); return; }
   if (!checkGSTINBeforeExport()) return;
-  // GSTIN reminder — warn once per session if blank
+  if (!checkPlantSpecsBeforeExport()) return;
+  // GSTIN reminder — warn once per session if blank (skipped if checkGSTINBeforeExport already asked)
   const gstin = document.getElementById('firmGSTIN')?.value?.trim();
-  if (!gstin && !sessionStorage.getItem('gstin_warned')) {
+  if (!gstin && !_gstinReminderShown && !sessionStorage.getItem('gstin_warned')) {
     sessionStorage.setItem('gstin_warned', '1');
     if (!confirm('Your GSTIN is not filled in.\n\nCorporate clients need your GSTIN to claim GST input credit. The PDF will be generated without it.\n\nContinue anyway?')) return;
   }
@@ -3085,7 +3309,7 @@ function downloadPDF() {
   doc.setFont("helvetica","bold");   doc.text("Revision:",  pw/2+2, y+11);
   doc.setFont("helvetica","normal"); doc.text("Rev "+meta.revision,  pw/2+22, y+11);
   doc.setFont("helvetica","bold");   doc.text("Dates:",     pw/2+2, y+16);
-  doc.setFont("helvetica","normal"); doc.text(`${meta.start||"-"} to ${meta.end||"-"}`, pw/2+16, y+16);
+  doc.setFont("helvetica","normal"); doc.text((meta.start||meta.end) ? `${meta.start||"TBC"} to ${meta.end||"TBC"}` : 'To be confirmed', pw/2+16, y+16);
   doc.setFont("helvetica","bold");   doc.text("Currency:",  pw/2+2, y+21);
   doc.setFont("helvetica","normal"); doc.text("INR (Rs.)", pw/2+20, y+21);
   doc.setFont("helvetica","bold");   doc.text("Date Issued:", pw/2+2, y+26);
@@ -3138,6 +3362,7 @@ function downloadPDF() {
 
   // ---- Zones (Project-wide at index 0, named zones follow) ----
   zones.forEach((zone,zi)=>{
+    if (!zone.scopes.some(sc=>sc.items.some(it=>(it.qty||0)>0))) return;   // nothing priced in this zone
     checkPage(16);
     doc.setFontSize(12); doc.setFont("helvetica","bold"); doc.setTextColor(80,50,15);
     doc.text(zi===0 ? `Project-wide` : `Zone ${zi}: ${zone.name}`, 12, y); y+=5;
@@ -3150,12 +3375,13 @@ function downloadPDF() {
     });
 
     sortedScopes.forEach((sc)=>{
+      if (!sc.items.some(it=>(it.qty||0)>0)) return;   // empty scope: no heading
       checkPage(14);
       doc.setFontSize(10); doc.setFont("helvetica","bold"); doc.setTextColor(41,90,150);
       doc.text(`  Scope: ${sc.name}`, 14, y); y+=4;
       doc.setTextColor(0,0,0);
 
-      const head=[['#','Description','Unit','Qty',`Rate (${S})`,`Total (${S})`,'Tax?']];
+      const head=[['#','Description','Unit','Qty',`Rate (${S})`,`Total (${S})`,'GST %']];
       const body=[];
 
       // Referral fee multiplier for client-facing PDF
@@ -3177,7 +3403,7 @@ function downloadPDF() {
           body.push([serial, descText, unitLbl, setQty,
             isFree ? '—' : fmtPdf(pdfRate),
             isFree ? 'Complimentary' : fmtPdf(itemTotal),
-            isFree ? '—' : lineTaxLabel(itm)
+            isFree ? '—' : lineGstPctLabel(itm)
           ]);
           if(itm.details&&itm.details.length) {
             body.push([{content:'  Sub-items:',colSpan:7,styles:{fontStyle:'bold',fillColor:[252,252,240],fontSize:8}}]);
@@ -3191,7 +3417,7 @@ function downloadPDF() {
                 subU, subQty,
                 isFree ? '—' : fmtPdf(subRate),
                 isFree ? '—' : fmtPdf(subQty*subRate),
-                ''
+                (sub.gstRate!==undefined ? (+sub.gstRate||0)+'%' : '')
               ]);
             });
           }
@@ -3219,22 +3445,13 @@ function downloadPDF() {
   });
 
   // ---- Summary Table ----
-  const {taxableSubtotal:pdfTaxable, nonTaxableSubtotal:pdfNonTax, gstTotal:pdfGst} = getTaxSplitTotals();
-  const worksSubtotal = pdfTaxable + pdfNonTax;
-  const design    = +document.getElementById('designCharges').value||0;
-  const labour    = +document.getElementById('labourCharges').value||0;
-  const transport = +document.getElementById('transportCharges').value||0;
-  const taxAmt    = pdfGst;
-  const provP     = +document.getElementById('provisionalPercent').value||0;
-  const provAmt   = worksSubtotal*provP/100;
-  const discP     = +document.getElementById('discountPercent').value||0;
-  // Referral fee — add to PDF grand total to match inflated line item rates
-  const _pdfRefEn = document.getElementById('referralEnabled')?.checked || false;
-  const _pdfRefPc = _pdfRefEn ? (+document.getElementById('referralPercent')?.value||10) : 0;
-  const _pdfRefAmt = _pdfRefEn ? (worksSubtotal+design+labour+transport+provAmt+taxAmt)*_pdfRefPc/100 : 0;
-  const grossBD   = worksSubtotal+design+labour+transport+provAmt+taxAmt+_pdfRefAmt;
-  const discAmt   = grossBD*discP/100;
-  const grand     = grossBD-discAmt;
+  const T         = computeTotals();
+  const worksSubtotal = T.works;
+  const design = T.design, labour = T.labour, transport = T.transport;
+  const taxAmt = T.taxAmt, provP = T.provP, provAmt = T.provAmt;
+  const discP  = T.discP,  discAmt = T.discAmt;
+  // Referral fee — included in PDF grand total to match inflated line item rates
+  const grand  = T.grand;
   const maintGrand = getMaintGrandTotal();
   const maintMths  = +document.getElementById('maintMonths')?.value||0;
   const maintTot   = maintGrand;
@@ -3246,8 +3463,9 @@ function downloadPDF() {
     labour>0    ? ['Labour / Install Charges',          `${S}${fmtPdf(labour)}`]        : null,
     transport>0 ? ['Transport Charges',                 `${S}${fmtPdf(transport)}`]     : null,
     provP>0  ? [`Provisional Sum @ ${provP}%`,          `${S}${fmtPdf(provAmt)}`]       : null,
-    true ? ['GST (per item rates)',                 `${S}${fmtPdf(taxAmt)}`]        : null,
-    discP>0  ? [`Discount @ ${discP}%`,                `-${S}${fmt(discAmt)}`]       : null,
+    discP>0  ? [`Discount @ ${discP}%`,                `-${S}${fmtPdf(discAmt)}`]       : null,
+    discP>0  ? ['Taxable value after discount',        `${S}${fmtPdf(T.preTax-discAmt)}`] : null,
+    true ? ['GST',                                  `${S}${fmtPdf(taxAmt)}`]        : null,
     ['GRAND TOTAL',                                     `${S}${fmtPdf(grand)}`],
     maintTot>0 ? [`Maintenance (${S}${fmt(maintMo)} x ${maintMths} mo.)`, `${S}${fmtPdf(maintTot)}`] : null,
   ].filter(Boolean);
@@ -3356,13 +3574,15 @@ function downloadPDF() {
   captureTelemety('pdf');
   doc.save(`${projSlug}_${revStr}_${dateStr}.pdf`);
   } catch(err) {
-    alert('PDF export error: ' + err.message);
+    alert(/jspdf|ExcelJS|XLSX|not defined|undefined/i.test(err.message||'') ? 'Export tools could not load. Check your internet connection and refresh the page, then try again.' : 'PDF export error: ' + err.message);
     console.error('PDF export failed:', err);
   }
 }
 
 // ===================== EXCEL EXPORT =====================
 async function downloadExcel() {
+  if (!requirePro(downloadExcel)) return;
+  if (!checkPlantSpecsBeforeExport()) return;
   if (needsLeadCapture()) { gateExport(downloadExcel, 'excel'); return; }
   try {
   const wb = new ExcelJS.Workbook();
@@ -3434,7 +3654,7 @@ async function downloadExcel() {
 
   function colHeaderRow() {
     const r = ws.addRow(['#','Description','Spec / Notes','Unit','Qty',
-      `Rate (${currency.symbol})`,'Tax Code',`Total (${currency.symbol})`,'Tax?']);
+      `Rate (${currency.symbol})`,'Tax Code',`Total (${currency.symbol})`,'GST %']);
     r.height = 16;
     r.eachCell(cell => {
       cell.fill = bg('A89F87');
@@ -3511,7 +3731,7 @@ async function downloadExcel() {
         zoneTotal  += itemTotal;
 
         const r = ws.addRow([serial, itm.desc||'', itm.notes||'', u,
-          itm.qty||0, itm.rate||0, itm.hsn||'', null, itm.taxable?'Yes':'No']);
+          itm.qty||0, itm.rate||0, itm.hsn||'', null, lineGstPctLabel(itm)]);
         if (itm.complimentary) { r.getCell(6).value=''; r.getCell(8).value='Complimentary'; }
         else r.getCell(8).value = { formula: `E${r.number}*F${r.number}` };
         r.height = itm.notes ? 20 : 14;
@@ -3576,19 +3796,12 @@ async function downloadExcel() {
   // ---- Cost Summary ----
   mergedRow('COST SUMMARY', '3D3515', 'FFFFFF', true, 11);
 
-  const {taxableSubtotal, nonTaxableSubtotal, gstTotal:dlGst} = getTaxSplitTotals();
-  const worksSub   = taxableSubtotal + nonTaxableSubtotal;
-  const design     = +document.getElementById('designCharges').value||0;
-  const labour     = +document.getElementById('labourCharges').value||0;
-  const transport  = +document.getElementById('transportCharges').value||0;
-  const taxP       = +document.getElementById('taxPercent').value||0;
-  const taxAmt     = true ? dlGst : (taxableSubtotal*taxP/100);
-  const provP      = +document.getElementById('provisionalPercent').value||0;
-  const provAmt    = worksSub*provP/100;
-  const discP      = +document.getElementById('discountPercent').value||0;
-  const grossBD    = worksSub+design+labour+transport+provAmt+taxAmt;
-  const discAmt    = grossBD*discP/100;
-  const grand      = grossBD-discAmt;
+  const T          = computeTotals();
+  const worksSub   = T.works;
+  const design = T.design, labour = T.labour, transport = T.transport;
+  const taxAmt = T.taxAmt, provP = T.provP, provAmt = T.provAmt;
+  const discP  = T.discP,  discAmt = T.discAmt;
+  const grand  = T.grand - T.referralAmt;   // referral shown as its own line below
   const maintMo    = +document.getElementById('maintMonthly')?.value||0;
   const maintMths  = +document.getElementById('maintMonths')?.value||0;
   const maintTot   = maintMo*maintMths;
@@ -3599,8 +3812,9 @@ async function downloadExcel() {
     labour>0    ? { label:'Labour / Install Charges', value:labour,     fontHex:'333333' } : null,
     transport>0 ? { label:'Transport Charges',        value:transport,  fontHex:'333333' } : null,
     provP>0 ? { label:`Provisional Sum @ ${provP}%`,  value:provAmt,    fontHex:'3A6A20' } : null,
-    { label:'GST (per item rates)',                   value:taxAmt,     fontHex:'333333' },
     discP>0 ? { label:`Discount @ ${discP}%`,         value:-discAmt,   fontHex:'AA3020' } : null,
+    discP>0 ? { label:'Taxable value after discount', value:T.preTax-discAmt, fontHex:'333333' } : null,
+    { label:'GST',                                    value:taxAmt,     fontHex:'333333' },
   ].filter(Boolean);
 
   summaryLines.forEach(({ label, value, fontHex }) => {
@@ -3616,9 +3830,9 @@ async function downloadExcel() {
 
   // Grand Total
   // Referral fee as separate visible line in internal Excel
-  const _xlRefEn = document.getElementById('referralEnabled')?.checked || false;
-  const _xlRefPc = _xlRefEn ? (+document.getElementById('referralPercent')?.value||10) : 0;
-  const _xlRefAmt = _xlRefEn ? grand * _xlRefPc / 100 : 0;
+  const _xlRefEn = T.refEn;
+  const _xlRefPc = T.refP;
+  const _xlRefAmt = T.referralAmt;
   if (_xlRefEn && _xlRefAmt > 0) {
     const refR = ws.addRow(['', `Referral / Coordination Fee @ ${_xlRefPc}%`, '', '', '', '', '', _xlRefAmt, '']);
     refR.getCell(2).font = { italic: true, color: { argb: 'FF8A6010' }, size: 9 };
@@ -3849,7 +4063,7 @@ async function downloadExcel() {
   a.click();
   URL.revokeObjectURL(url);
   } catch(err) {
-    alert('Excel export error: ' + err.message);
+    alert(/jspdf|ExcelJS|XLSX|not defined|undefined/i.test(err.message||'') ? 'Export tools could not load. Check your internet connection and refresh the page, then try again.' : 'Excel export error: ' + err.message);
     console.error('Excel export failed:', err);
   }
 }
@@ -3974,7 +4188,87 @@ function toggleDiscountField() {
 // These codes are distributed manually after payment confirmation.
 // Each code works once per browser. Update this list as you scale.
 
-function isUnlocked() { return true; }
+const PRO_PRICE_TEXT = '₹999 / month';
+const PRO_REGION = 'India';
+// ===================== PRO ACCESS (server-verified) =====================
+// Pro status lives in Supabase (table pro_access, filled by payments or by redeem_unlock_code()).
+// No unlock codes are stored in this page. PDF export stays free; Excel exports need Pro.
+let _proCache = { ok:false, until:0, checkedAt:0 };
+async function checkPro(force) {
+  if (!force && Date.now() - _proCache.checkedAt < 5*60*1000) return _proCache.ok;
+  let sb = null;
+  try { sb = getSupabase(); } catch(e) { sb = null; }
+  if (!sb || !_supaUser) { _proCache = { ok:false, until:0, checkedAt:Date.now() }; return false; }
+  try {
+    const res = await sb.from('pro_access').select('expires_at').eq('user_id', _supaUser.id).maybeSingle();
+    const until = (res && res.data && res.data.expires_at) ? Date.parse(res.data.expires_at) : 0;
+    _proCache = { ok: until > Date.now(), until: until, checkedAt: Date.now() };
+  } catch(e) { _proCache = { ok:false, until:0, checkedAt:Date.now() }; }
+  return _proCache.ok;
+}
+function isUnlocked() { return _proCache.ok && _proCache.until > Date.now(); }
+function _updateProBadge() {
+  const badge = document.getElementById('trialBadge');
+  if (!badge) return;
+  if (isUnlocked()) { badge.textContent = 'PRO'; badge.style.display = ''; }
+  else { badge.style.display = 'none'; }
+}
+let _proPassOnce = false;
+function requirePro(retry) {
+  if (_proPassOnce) { _proPassOnce = false; return true; }
+  checkPro().then(function(ok) {
+    if (ok) { _proPassOnce = true; retry(); }
+    else showProGate(retry);
+  });
+  return false;
+}
+function closeProGate() { const o = document.getElementById('proGateOverlay'); if (o) o.remove(); }
+function showProGate(retry) {
+  closeProGate();
+  const loggedIn = !!_supaUser;
+  const o = document.createElement('div');
+  o.id = 'proGateOverlay';
+  o.style.cssText = 'position:fixed;inset:0;background:rgba(10,25,18,.55);display:flex;align-items:center;justify-content:center;z-index:10000;padding:16px;';
+  o.onclick = function(e){ if (e.target === o) closeProGate(); };
+  o.innerHTML =
+    '<div style="background:#fff;border-radius:12px;max-width:380px;width:100%;padding:24px 22px;font-family:inherit;color:#1A3829;position:relative;box-shadow:0 12px 40px rgba(0,0,0,.25);">' +
+      '<button type="button" onclick="closeProGate()" style="position:absolute;top:8px;right:10px;background:none;border:none;font-size:22px;color:#7E786F;cursor:pointer;">&times;</button>' +
+      '<div style="font-size:18px;font-weight:700;margin-bottom:6px;">Excel export is a Pro feature</div>' +
+      '<div style="font-size:13px;color:#5C574F;line-height:1.5;margin-bottom:12px;">PDF export stays free. Pro unlocks Excel BOQ and quantities exports, cloud save and your own branding.</div>' +
+      '<div style="font-size:22px;font-weight:700;margin-bottom:2px;">' + PRO_PRICE_TEXT + '</div>' +
+      '<div style="font-size:11.5px;color:#7E786F;margin-bottom:14px;">Founding price, locked for life for the first 500 users</div>' +
+      '<a href="mailto:sales@terracost.io?subject=' + encodeURIComponent('TerraCost Pro — ' + PRO_REGION) + '" style="display:block;text-align:center;background:#A8711E;color:#fff;text-decoration:none;font-weight:600;padding:11px;border-radius:8px;margin-bottom:14px;">Get Pro</a>' +
+      (loggedIn
+        ? '<div style="font-size:12px;color:#5C574F;margin-bottom:6px;">Have an unlock code?</div>' +
+          '<div style="display:flex;gap:8px;"><input id="proCodeInput" type="text" placeholder="Enter code" autocomplete="off" style="flex:1;margin:0;text-transform:uppercase;">' +
+          '<button type="button" id="proCodeBtn" style="background:#1A3829;color:#fff;border:none;border-radius:6px;padding:0 14px;font-weight:600;cursor:pointer;">Unlock</button></div>' +
+          '<div id="proCodeMsg" style="font-size:12px;min-height:18px;margin-top:6px;color:#B03A3A;"></div>'
+        : '<button type="button" id="proLoginBtn" style="width:100%;background:#1A3829;color:#fff;border:none;border-radius:8px;padding:10px;font-weight:600;cursor:pointer;">Log in to use your Pro account or code</button>') +
+    '</div>';
+  document.body.appendChild(o);
+  if (!loggedIn) {
+    document.getElementById('proLoginBtn').onclick = function(){ closeProGate(); openAuthModal('login'); };
+    return;
+  }
+  document.getElementById('proCodeBtn').onclick = async function() {
+    const msg  = document.getElementById('proCodeMsg');
+    const code = (document.getElementById('proCodeInput').value || '').trim().toUpperCase();
+    if (!code) { msg.textContent = 'Enter your code.'; return; }
+    msg.style.color = '#7E786F'; msg.textContent = 'Checking…';
+    try {
+      const res = await getSupabase().rpc('redeem_unlock_code', { p_code: code });
+      if (res.error) throw res.error;
+      await checkPro(true); _updateProBadge();
+      if (isUnlocked()) { closeProGate(); _proPassOnce = true; retry(); }
+      else { msg.style.color = '#B03A3A'; msg.textContent = 'Code accepted, but Pro could not be confirmed. Please refresh and try again.'; }
+    } catch(e) {
+      const m = String((e && e.message) || e);
+      const map = { INVALID_CODE:'That code is not valid.', CODE_EXPIRED:'That code has expired.', CODE_USED_UP:'That code has already been used.', ALREADY_USED:'You have already used this code.', LOGIN_REQUIRED:'Please log in first.' };
+      const key = Object.keys(map).find(k => m.indexOf(k) !== -1);
+      msg.style.color = '#B03A3A'; msg.textContent = key ? map[key] : 'Could not check the code. Check your connection and try again.';
+    }
+  };
+}
 
 
 // ===================== SPLASH =====================
@@ -4063,15 +4357,7 @@ async function submitLead() {
       });
     });
   });
-  const {gstTotal} = getTaxSplitTotals();
-  const works  = Array.from(zones).reduce((s,z)=>s+z.scopes.reduce((ss,sc)=>ss+sc.items.reduce((si,it)=>si+(it.qty||0)*(it.rate||0),0),0),0);
-  const design = +document.getElementById('designCharges')?.value||0;
-  const labour = +document.getElementById('labourCharges')?.value||0;
-  const trans  = +document.getElementById('transportCharges')?.value||0;
-  const provP  = +document.getElementById('provisionalPercent')?.value||0;
-  const discP  = +document.getElementById('discountPercent')?.value||0;
-  const gross  = works + design + labour + trans + (works*provP/100) + gstTotal;
-  const grand  = Math.round((gross - (gross*discP/100))*100)/100;
+  const grand  = Math.round(computeTotals().grand*100)/100;
 
   try {
     const fd = new FormData();
@@ -4127,15 +4413,7 @@ async function captureTelemety(exportType) {
         });
       });
     });
-    const {gstTotal} = getTaxSplitTotals();
-    const works  = Array.from(zones).reduce((s,z)=>s+z.scopes.reduce((ss,sc)=>ss+sc.items.reduce((si,it)=>si+(it.qty||0)*(it.rate||0),0),0),0);
-    const design = +document.getElementById('designCharges')?.value||0;
-    const labour = +document.getElementById('labourCharges')?.value||0;
-    const trans  = +document.getElementById('transportCharges')?.value||0;
-    const provP  = +document.getElementById('provisionalPercent')?.value||0;
-    const discP  = +document.getElementById('discountPercent')?.value||0;
-    const gross  = works + design + labour + trans + (works*provP/100) + gstTotal;
-    const grand  = Math.round((gross - (gross*discP/100))*100)/100;
+    const grand  = Math.round(computeTotals().grand*100)/100;
 
     await fetch(`${_SB_URL}/rest/v1/boq_telemetry`, {
       method:'POST',
@@ -4448,17 +4726,10 @@ function loadStandardAMC() {
 function updateStickyBar() {
   const el = document.getElementById('stickyTotals');
   if (!el) return;
-  const {taxableSubtotal, nonTaxableSubtotal, gstTotal} = getTaxSplitTotals();
-  const works    = taxableSubtotal + nonTaxableSubtotal;
-  const design   = +document.getElementById('designCharges')?.value||0;
-  const labour   = +document.getElementById('labourCharges')?.value||0;
-  const transport= +document.getElementById('transportCharges')?.value||0;
-  const provP    = +document.getElementById('provisionalPercent')?.value||0;
-  const discP    = +document.getElementById('discountPercent')?.value||0;
-  const provAmt  = works * provP / 100;
-  const gross    = works + design + labour + transport + provAmt + gstTotal;
-  const discAmt  = gross * discP / 100;
-  const grand    = gross - discAmt;
+  const T        = computeTotals();
+  const works    = T.works;
+  const gstTotal = T.taxAmt;
+  const grand    = T.grand;
   const maintAmt = getMaintGrandTotal();
 
   let html = '';
@@ -4546,7 +4817,7 @@ function confirmScopePicker() {
         zones[_pickerZoneIdx].scopes.push({
           name,
           items: template.map(x => {
-            const memRate = getRateMem('INR', x.desc);
+            const memRate = _memRateIn('INR', x.desc, x.unit);
             const rate    = memRate !== null && memRate > 0 ? memRate : (x.rate || 0);
             const gstRate = x.gst !== undefined ? x.gst : (x.taxable ? 18 : 0);
             return {
@@ -4593,6 +4864,7 @@ document.addEventListener('click', function() { closeXlDropdown(); });
 
 // ===================== QUANTITIES ONLY EXCEL =====================
 async function downloadQuantitiesExcel() {
+  if (!requirePro(downloadQuantitiesExcel)) return;
   if (needsLeadCapture()) { gateExport(downloadQuantitiesExcel, 'excel_qty'); return; }
   try {
   const wb  = new ExcelJS.Workbook();
@@ -4801,7 +5073,7 @@ async function downloadQuantitiesExcel() {
   a.click();
   URL.revokeObjectURL(url);
   } catch(err) {
-    alert('Quantities export error: ' + err.message);
+    alert(/jspdf|ExcelJS|XLSX|not defined|undefined/i.test(err.message||'') ? 'Export tools could not load. Check your internet connection and refresh the page, then try again.' : 'Quantities export error: ' + err.message);
     console.error('Quantities export failed:', err);
   }
 }
@@ -5129,7 +5401,7 @@ function renderItemPickerList(template, existing) {
       ' onclick="toggleItemPicker(' + idx + ', this)" data-idx="' + idx + '">' +
       '<input type="checkbox" id="ipck_' + idx + '" ' + (alreadyIn ? 'disabled' : '') +
       ' onclick="event.stopPropagation();toggleItemPicker(' + idx + ',this.closest(\'.item-picker-item\'))">' +
-      '<label for="ipck_' + idx + '">' + x.desc + scientificLabel + sizeBadge + lBadges +
+      '<label>' + x.desc + scientificLabel + sizeBadge + lBadges +
       (x.toxic ? '<span style="font-size:9px;background:#FFF0F0;color:#C0392B;padding:1px 5px;border-radius:3px;margin-left:3px;">⚠ Toxic</span>' : '') +
       '</label></div>';
   }).join('');
@@ -5176,7 +5448,7 @@ function confirmItemPicker() {
     const x = template[idx];
     if (!x) return;
     if (sc.items.some(it => it.desc === x.desc)) return; // no duplicates
-    const memRate = getRateMem('INR', x.desc);
+    const memRate = _memRateIn('INR', x.desc, x.unit);
     const rate    = memRate !== null && memRate > 0 ? memRate : (x.rate || 0);
     const gstRate = x.gst !== undefined ? x.gst : (x.taxable ? 18 : 0);
     // For Potted Plants: build composite line item with sub-items
@@ -5191,7 +5463,8 @@ function confirmItemPicker() {
         if (subName.indexOf('Planter') !== -1 && matLabel) {
           subName = matLabel + ' Planter (specify size)';
         }
-        return { name: subName, qty: 1, rate: sub.rate || 0, unit: sub.unit || 'nos', unit_other: '', hsn: '', gstRate: sub.gst || 0 };
+        var subMem = getRateMem('INR', subName);
+        return { name: subName, qty: 1, rate: (subMem !== null && subMem > 0) ? subMem : (sub.rate || 0), unit: sub.unit || 'nos', unit_other: '', hsn: '', gstRate: sub.gst || 0 };
       });
       if (!details.length) {
         details = [
@@ -5708,10 +5981,7 @@ function selectTemplate(projectType) {
 
 
 window.onload = function() {
-  if (isUnlocked()) {
-    const badge = document.getElementById('trialBadge');
-    if (badge) badge.style.display = 'none';
-  }
+  _updateProBadge();
   const loaded = loadState();
   if (!loaded) {
     zones = [{ id:'zone_pw', name:'Project-wide', projectWide:true, scopes:[] }];
@@ -5995,7 +6265,7 @@ async function cloudLoadProject(id) {
   var sb = getSupabase();
   var res = await sb
     .from('projects')
-    .select('data')
+    .select('data, updated_at')
     .eq('id', id)
     .single();
 
@@ -6003,10 +6273,11 @@ async function cloudLoadProject(id) {
 
   var s = res.data.data;
   if (!s || !s.zones) { alert('Invalid project data.'); return; }
+  seedRateMemFromState(s, res.data.updated_at);
   localStorage.setItem('boq_india_v1', JSON.stringify(s));
   localStorage.setItem('boq_current_project_id', id);
   closeProjectsPanel();
-  location.reload();
+  clearTimeout(saveTimer); saveTimer = null; location.reload();
 }
 
 async function cloudDeleteProject(id, name) {
@@ -6051,6 +6322,7 @@ async function initSupaAuth() {
     }
 
     updateAuthUI();
+    if (_supaUser) { seedRateMemFromCloud(); checkPro(true).then(_updateProBadge); }
 
     // Listen for auth state changes
     sb.auth.onAuthStateChange(function(event, session) {
@@ -6062,6 +6334,7 @@ async function initSupaAuth() {
       }
       _supaUser = newUser;
       updateAuthUI();
+      checkPro(true).then(_updateProBadge); if (newUser) seedRateMemFromCloud();
     });
   } catch(e) {
     console.warn('Supabase auth init error:', e);
