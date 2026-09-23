@@ -2968,7 +2968,7 @@ function computeTotals() {
   const taxAmt  = taxBeforeDisc * (1 - discP/100);
   const refEn   = document.getElementById('referralEnabled')?.checked || false;
   const refP    = refEn ? (num('referralPercent') || 10) : 0;
-  const referralAmt = refEn ? (preTax - discAmt + taxAmt) * refP / 100 : 0;
+  const referralAmt = refEn ? works * refP / 100 : 0;
   const grand   = preTax - discAmt + taxAmt + referralAmt;
   return { taxableSubtotal:sp.taxableSubtotal, nonTaxableSubtotal:sp.nonTaxableSubtotal, works,
            design, labour, transport, designGst, labourGst, transportGst, provP, provAmt,
