@@ -6072,7 +6072,6 @@ function selectTemplate(projectType) {
 
 
 window.onload = function() {
-  try {
   _updateProBadge();
   const loaded = loadState();
   if (!loaded) {
@@ -6119,7 +6118,7 @@ window.onload = function() {
   }
 
   _prevProjectType = document.getElementById('projectType')?.value || null;
-  } catch(e) { console.error('onload error', e); } finally { initSplash(); }
+  initSplash();
 };
 
 
