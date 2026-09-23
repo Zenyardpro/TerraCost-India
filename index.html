@@ -5954,6 +5954,7 @@ async function loadProjectsList() {
     .from('projects')
     .select('id, name, created_at, updated_at')
     .eq('user_id', _supaUser.id)
+    .eq('region', 'IN')            // Gulf projects share this table (region='GULF')
     .order('updated_at', { ascending: false });
 
   if (res.error) {
