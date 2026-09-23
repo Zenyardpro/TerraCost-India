@@ -1253,6 +1253,11 @@
   document.addEventListener('DOMContentLoaded', function() {
     var ov = document.getElementById('appLoadingOverlay');
     if (ov) { ov.style.opacity='0'; ov.style.transition='opacity .3s'; setTimeout(function(){ ov.style.display='none'; }, 300); }
+    // Dismiss splash early — no need to wait for window.onload / external CDN scripts
+    setTimeout(function() {
+      var sp = document.getElementById('splashOverlay');
+      if (sp) { sp.classList.add('hiding'); setTimeout(function(){ sp.style.display='none'; }, 420); }
+    }, 800);
   });
 </script>
 <div class="terra-eco-strip">
