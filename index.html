@@ -1268,7 +1268,8 @@
       <span class="auth-email" id="authUserEmail"></span>
       <button class="auth-save-btn" onclick="cloudSaveProject()">&#9729; Save Project</button>
       <button onclick="openProjectsPanel()">My Projects</button>
-      <button onclick="supaLogout()" style="margin-left:auto;">Log Out</button>
+      <button onclick="openAccountSettings()" style="margin-left:auto;">Account</button>
+      <button onclick="supaLogout()">Log Out</button>
     </div>
   </div>
 
@@ -2357,6 +2358,7 @@ function newBOQ() {
   // Reset cloud project tracking so next Save creates a new row
   _currentProjectId = null;
   try { localStorage.removeItem('boq_current_project_id'); } catch(e) {}
+  try { applyProfileToNewBOQ(); } catch(e) {}
   renderZones(); updateTotals(); updateAccordionHints(); scheduleSave();
   // Offer template
   showTemplatePicker();
@@ -3283,7 +3285,17 @@ function downloadPDF() {
   // ---- Header ----
   doc.setFillColor(92,70,38); doc.rect(0,0,pw,22,'F');
   doc.setFontSize(14); doc.setFont("helvetica","bold"); doc.setTextColor(255,245,220);
-  doc.text("LANDSCAPE BILL OF QUANTITIES & PROPOSAL", pw/2, 9, {align:"center"});
+  doc.text((typeof brandPdfTitle==='function' ? brandPdfTitle("LANDSCAPE BILL OF QUANTITIES & PROPOSAL") : "LANDSCAPE BILL OF QUANTITIES & PROPOSAL"), pw/2, 9, {align:"center"});
+  // Pro: firm logo on the left of the header band
+  try {
+    const lg = (typeof brandPdfLogo==='function') ? brandPdfLogo() : null;
+    if (lg && lg.w && lg.h) {
+      const ratio = lg.w/lg.h; let lh = 14, lw = lh*ratio;
+      if (lw > 38) { lw = 38; lh = lw/ratio; }
+      doc.setFillColor(255,255,255); doc.roundedRect(5, 11-lh/2-1.5, lw+3, lh+3, 1.5, 1.5, 'F');
+      doc.addImage(lg.data, lg.fmt, 6.5, 11-lh/2, lw, lh);
+    }
+  } catch(e) { console.warn('Logo skipped:', e); }
   doc.setFontSize(9); doc.setFont("helvetica","normal");
   const firmLine  = [meta.firmName, meta.firmContact].filter(Boolean).join('  |  ');
   const gstinLine = [meta.firmAddr, meta.firmGSTIN && `GSTIN: ${meta.firmGSTIN}`, meta.firmPAN && `PAN: ${meta.firmPAN}`].filter(Boolean).join('  |  ');
@@ -3563,8 +3575,8 @@ function downloadPDF() {
     doc.setPage(i);
     doc.setFontSize(8); doc.setTextColor(150);
     doc.text(`${meta.quoteRef||'BOQ'}  |  Rev ${meta.revision||1}  |  Page ${i} of ${totalPages}`, pw/2, ph-7, {align:'center'});
-    doc.setFontSize(7); doc.setTextColor(180);
-    doc.text('Prepared with TerraCost  ·  terracost.io', pw/2, ph-3, {align:'center'});
+    const _footLine = (typeof brandPdfFooter==='function') ? brandPdfFooter('Prepared with TerraCost  ·  terracost.io') : 'Prepared with TerraCost  ·  terracost.io';
+    if (_footLine) { doc.setFontSize(7); doc.setTextColor(180); doc.text(_footLine, pw/2, ph-3, {align:'center'}); }
   }
 
   // ---- Dynamic filename ----
@@ -6037,6 +6049,7 @@ const SUPA_KEY  = 'sb_publishable_hrhLhUw-7eiGfT23wRLtqw_EiTqlFqs';
 
 let _supaClient = null;
 let _supaUser   = null;
+var _currentProjectId = null;   // cloud row of the open BOQ; was used but never declared, which crashed auth init
 
 function getSupabase() {
   if (!_supaClient) {
@@ -6066,6 +6079,8 @@ function setAuthMode(mode) {
   var sub   = document.getElementById('authModalSub');
   var btn   = document.getElementById('authSubmitBtn');
   var tog   = document.getElementById('authToggle');
+  var fgt   = document.getElementById('authForgotRow');
+  if (fgt) fgt.style.display = (mode === 'signup') ? 'none' : '';
   if (mode === 'signup') {
     title.textContent = 'Create Account';
     sub.textContent   = 'Save your BOQ projects to the cloud. Free forever.';
@@ -6097,7 +6112,7 @@ async function authSubmit() {
   var sb = getSupabase();
   var result;
   if (_authMode === 'signup') {
-    result = await sb.auth.signUp({ email: email, password: pass });
+    result = await sb.auth.signUp({ email: email, password: pass, options: { emailRedirectTo: location.origin + location.pathname } });
   } else {
     result = await sb.auth.signInWithPassword({ email: email, password: pass });
   }
@@ -6122,6 +6137,7 @@ async function supaLogout() {
   var sb = getSupabase();
   await sb.auth.signOut();
   _supaUser = null;
+  _profile = null; _brandLogo = null;
   // Drop the project pointer — it belongs to the account that just left.
   _currentProjectId = null;
   try { localStorage.removeItem('boq_current_project_id'); } catch(e) {}
@@ -6322,7 +6338,8 @@ async function initSupaAuth() {
     }
 
     updateAuthUI();
-    if (_supaUser) { seedRateMemFromCloud(); checkPro(true).then(_updateProBadge); }
+    if (_supaUser) { seedRateMemFromCloud(); checkPro(true).then(_updateProBadge); loadProfile(); }
+    handleRecoveryAfterAuth();
 
     // Listen for auth state changes
     sb.auth.onAuthStateChange(function(event, session) {
@@ -6335,6 +6352,8 @@ async function initSupaAuth() {
       _supaUser = newUser;
       updateAuthUI();
       checkPro(true).then(_updateProBadge); if (newUser) seedRateMemFromCloud();
+      if (newUser) { loadProfile(); } else { _profile = null; _brandLogo = null; }
+      if (event === 'PASSWORD_RECOVERY') { _pwRecoveryPending = true; handleRecoveryAfterAuth(); }
     });
   } catch(e) {
     console.warn('Supabase auth init error:', e);
@@ -6506,6 +6525,7 @@ if (document.readyState === 'loading') {
     <p class="auth-sub" id="authModalSub">Access your saved BOQ projects from any device.</p>
     <input type="email" id="authEmail" placeholder="Email address">
     <input type="password" id="authPassword" placeholder="Password (min 6 chars)">
+    <div id="authForgotRow" style="text-align:right;margin:-2px 0 10px;"><a onclick="authForgot()" style="font-size:12.5px;color:var(--forest);cursor:pointer;text-decoration:underline;">Forgot password?</a></div>
     <button class="auth-btn-primary" id="authSubmitBtn" onclick="authSubmit()">Log In</button>
     <div class="auth-error" id="authError"></div>
     <div class="auth-toggle" id="authToggle">
@@ -6526,6 +6546,370 @@ if (document.readyState === 'loading') {
     </div>
   </div>
 </div>
+
+
+<!-- ===================== ACCOUNT & SETTINGS (self-contained) ===================== -->
+<script>
+// Profile cache for the signed-in user (public.profiles row). Null when logged out.
+var _profile = null;
+var _brandLogo = null;           // { data, fmt, w, h } — preloaded so the PDF export stays synchronous
+var _pwRecoveryPending = false;  // set when the page opens from a password-reset link
+
+// Edition config: which profile columns map to which BOQ fields, and how they're labelled.
+var AC_CFG = { firmFields: [
+    ['company_name','firmName','Firm / company name','Zenyard Studio'],
+    ['signatory','preparedBy','Your name / signatory','Name'],
+    ['firm_contact','firmContact','Contact shown on documents (phone / email)','contact@firm.com'],
+    ['gstin_vat_number','firmGSTIN','GSTIN','22AAAAA0000A1Z5'],
+    ['pan','firmPAN','PAN','AAAPL1234C'],
+    ['msme','firmMSME','MSME / Udyam reg. no. (optional)','UDYAM-KA-00-0000000'],
+    ['address','firmAddr','Firm address','#12, MG Road, Bengaluru - 560001']],
+  currencies: null, upperFields: ['gstin_vat_number','pan'] };
+var PROFILE_FIELDS = ['full_name','phone','website','custom_header_text','custom_footer_text','default_terms']
+  .concat(AC_CFG.firmFields.map(function (f) { return f[0]; }))
+  .concat(AC_CFG.currencies ? ['default_currency'] : []);
+// Map: profile column -> BOQ "Your Firm Details" input
+var FIRM_FIELD_MAP = {};
+AC_CFG.firmFields.forEach(function (f) { FIRM_FIELD_MAP[f[0]] = f[1]; });
+
+function _acEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+// ---------- Password reset: detect the link BEFORE supabase-js consumes the URL ----------
+(function detectRecoveryLink() {
+  try {
+    var h = location.hash || '';
+    if (h.indexOf('type=recovery') !== -1) _pwRecoveryPending = true;
+    if (h.indexOf('error_code=') !== -1 && /otp_expired|access_denied/.test(h)) {
+      window._pwRecoveryLinkError = 'That reset link has expired or was already used. Request a new one below.';
+    }
+  } catch (e) {}
+})();
+
+async function authForgot() {
+  var errEl = document.getElementById('authError');
+  var email = (document.getElementById('authEmail').value || '').trim();
+  errEl.style.color = 'var(--red)';
+  if (!email || email.indexOf('@') === -1) { errEl.textContent = 'Enter your account email above, then tap "Forgot password?" again.'; return; }
+  errEl.style.color = 'var(--stone)';
+  errEl.textContent = 'Sending reset link…';
+  if (!getSupabase()) { errEl.style.color = 'var(--red)'; errEl.textContent = 'Could not reach the server. Check your connection.'; return; }
+  try {
+    var res = await getSupabase().auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+    if (res.error) { errEl.style.color = 'var(--red)'; errEl.textContent = res.error.message; return; }
+    errEl.style.color = 'var(--forest)';
+    errEl.textContent = 'If an account exists for ' + email + ', a reset link is on its way. Check your inbox and spam folder.';
+  } catch (e) { errEl.style.color = 'var(--red)'; errEl.textContent = 'Could not send the email. Please try again.'; }
+}
+
+function _acOverlay(id, inner, maxW) {
+  var old = document.getElementById(id); if (old) old.remove();
+  var o = document.createElement('div');
+  o.id = id;
+  o.style.cssText = 'position:fixed;inset:0;background:rgba(10,25,18,.55);display:flex;align-items:flex-start;justify-content:center;z-index:10001;padding:16px;overflow-y:auto;';
+  o.innerHTML = '<div style="background:#fff;border-radius:12px;width:100%;max-width:' + (maxW || 560) + 'px;margin:24px auto;padding:22px 22px 18px;position:relative;box-shadow:0 20px 60px rgba(0,0,0,.25);font-size:14px;color:var(--stone-dk);">' + inner + '</div>';
+  document.body.appendChild(o);
+  return o;
+}
+
+function openSetNewPassword() {
+  _pwRecoveryPending = false;
+  var o = _acOverlay('setPwOverlay',
+    '<h2 style="margin:0 0 6px;font-size:20px;">Set a new password</h2>' +
+    '<p style="margin:0 0 14px;color:var(--stone);font-size:13px;">Choose a new password for ' + _acEsc(_supaUser ? _supaUser.email : 'your account') + '.</p>' +
+    '<input type="password" id="newPw1" placeholder="New password (min 6 characters)" style="width:100%;margin-bottom:8px;">' +
+    '<input type="password" id="newPw2" placeholder="Repeat new password" style="width:100%;margin-bottom:12px;">' +
+    '<button class="auth-btn-primary" id="newPwBtn" style="width:100%;">Save new password</button>' +
+    '<div id="newPwMsg" style="margin-top:10px;font-size:13px;min-height:18px;"></div>', 420);
+  document.getElementById('newPwBtn').onclick = async function () {
+    var a = document.getElementById('newPw1').value, b = document.getElementById('newPw2').value;
+    var m = document.getElementById('newPwMsg'); m.style.color = 'var(--red)';
+    if (a.length < 6) { m.textContent = 'Password must be at least 6 characters.'; return; }
+    if (a !== b) { m.textContent = 'The two passwords don\u2019t match.'; return; }
+    var r = await getSupabase().auth.updateUser({ password: a });
+    if (r.error) { m.textContent = r.error.message; return; }
+    m.style.color = 'var(--forest)'; m.textContent = 'Password updated. You\u2019re signed in.';
+    setTimeout(function(){ var x = document.getElementById('setPwOverlay'); if (x) x.remove(); }, 1400);
+  };
+  setTimeout(function(){ var f = document.getElementById('newPw1'); if (f) f.focus(); }, 80);
+}
+
+// Called from initSupaAuth / onAuthStateChange
+function handleRecoveryAfterAuth() {
+  if (window._pwRecoveryLinkError) {
+    var msg = window._pwRecoveryLinkError; window._pwRecoveryLinkError = null;
+    openAuthModal('login');
+    var e = document.getElementById('authError'); if (e) e.textContent = msg;
+    return;
+  }
+  if (_pwRecoveryPending && _supaUser) openSetNewPassword();
+}
+
+// ---------- Profile load / save ----------
+async function loadProfile() {
+  if (!_supaUser) { _profile = null; _brandLogo = null; return null; }
+  if (!getSupabase()) { _profile = null; return null; }
+  try {
+    var res = await getSupabase().from('profiles').select('*').eq('id', _supaUser.id).maybeSingle();
+    _profile = (res && res.data) ? res.data : {};
+  } catch (e) { _profile = {}; }
+  // The app restores the saved BOQ on window load; fill blanks only after that, or it would be overwritten.
+  if (document.readyState === 'complete') fillBlankFirmFields();
+  else window.addEventListener('load', function () { setTimeout(fillBlankFirmFields, 0); }, { once: true });
+  preloadBrandLogo();
+  return _profile;
+}
+
+async function saveProfile(patch) {
+  var sb = getSupabase();
+  patch.updated_at = new Date().toISOString();
+  var up = await sb.from('profiles').update(patch).eq('id', _supaUser.id).select('id');
+  if (up.error) return up.error;
+  if (!up.data || !up.data.length) {   // no row yet (older accounts) — create it
+    var row = Object.assign({ id: _supaUser.id, email: _supaUser.email }, patch);
+    var ins = await sb.from('profiles').insert(row);
+    if (ins.error) return ins.error;
+  }
+  _profile = Object.assign({}, _profile || {}, patch);
+  return null;
+}
+
+// Fill BOQ firm fields from the profile only where they are empty — never overwrite project data.
+function fillBlankFirmFields() {
+  if (!_profile) return;
+  var changed = false;
+  Object.keys(FIRM_FIELD_MAP).forEach(function (col) {
+    var el = document.getElementById(FIRM_FIELD_MAP[col]);
+    if (el && !String(el.value || '').trim() && _profile[col]) { el.value = _profile[col]; changed = true; }
+  });
+  if (changed) { try { updateAccordionHints(); scheduleSave(); } catch (e) {} }
+}
+
+// Overwrite the current BOQ's firm fields with the saved profile (explicit user action).
+function applyFirmProfileToBOQ() {
+  if (!_profile) return;
+  Object.keys(FIRM_FIELD_MAP).forEach(function (col) {
+    var el = document.getElementById(FIRM_FIELD_MAP[col]);
+    if (el && _profile[col] != null) el.value = _profile[col];
+  });
+  try { updateAccordionHints(); scheduleSave(); } catch (e) {}
+}
+
+// Hook for newBOQ(): firm details + default terms for every new BOQ.
+function applyProfileToNewBOQ() {
+  if (!_profile) return;
+  fillBlankFirmFields();
+  if (AC_CFG.currencies && _profile.default_currency) {
+    var cs = document.getElementById('currencySelect');
+    if (cs && cs.value !== _profile.default_currency && [].some.call(cs.options, function (o) { return o.value === _profile.default_currency; })) {
+      cs.value = _profile.default_currency;
+      try { setCurrency(); } catch (e) {}
+    }
+  }
+  var t = document.getElementById('tnc');
+  if (t && _profile.default_terms && String(_profile.default_terms).trim()) t.value = _profile.default_terms;
+}
+
+// ---------- Branding helpers used by the PDF export ----------
+function _brandIsPro() { try { return typeof isUnlocked === 'function' && isUnlocked(); } catch (e) { return false; } }
+function brandPdfTitle(defaultTitle) {
+  var t = _profile && _profile.custom_header_text && String(_profile.custom_header_text).trim();
+  return (_brandIsPro() && t) ? t : defaultTitle;
+}
+// Returns the footer line for PDFs: custom text on Pro, nothing on Pro with no text, default otherwise.
+function brandPdfFooter(defaultLine) {
+  if (!_brandIsPro()) return defaultLine;
+  var t = _profile && _profile.custom_footer_text && String(_profile.custom_footer_text).trim();
+  return t || '';
+}
+function brandPdfLogo() { return (_brandIsPro() && _brandLogo) ? _brandLogo : null; }
+
+function preloadBrandLogo() {
+  _brandLogo = null;
+  var url = _profile && _profile.logo_url;
+  if (!url) return;
+  fetch(url, { cache: 'no-store' }).then(function (r) { return r.ok ? r.blob() : null; }).then(function (blob) {
+    if (!blob) return;
+    var fr = new FileReader();
+    fr.onload = function () {
+      var data = fr.result;
+      var img = new Image();
+      img.onload = function () {
+        _brandLogo = { data: data, fmt: /^data:image\/png/.test(data) ? 'PNG' : 'JPEG', w: img.naturalWidth, h: img.naturalHeight };
+        var p = document.getElementById('acLogoPreview'); if (p) { p.src = data; p.style.display = ''; }
+      };
+      img.src = data;
+    };
+    fr.readAsDataURL(blob);
+  }).catch(function () {});
+}
+
+async function uploadLogo(file) {
+  var msg = document.getElementById('acLogoMsg');
+  msg.style.color = 'var(--red)';
+  if (!file) return;
+  if (!/^image\/(png|jpeg)$/.test(file.type)) { msg.textContent = 'Use a PNG or JPG image.'; return; }
+  if (file.size > 1024 * 1024) { msg.textContent = 'Logo must be under 1 MB.'; return; }
+  msg.style.color = 'var(--stone)'; msg.textContent = 'Uploading…';
+  var sb = getSupabase();
+  var path = _supaUser.id + '/logo.' + (file.type === 'image/png' ? 'png' : 'jpg');
+  var up = await sb.storage.from('logos').upload(path, file, { upsert: true, contentType: file.type, cacheControl: '60' });
+  if (up.error) { msg.style.color = 'var(--red)'; msg.textContent = up.error.message; return; }
+  var pub = sb.storage.from('logos').getPublicUrl(path).data.publicUrl + '?v=' + Date.now();
+  var err = await saveProfile({ logo_url: pub });
+  if (err) { msg.style.color = 'var(--red)'; msg.textContent = err.message; return; }
+  preloadBrandLogo();
+  msg.style.color = 'var(--forest)'; msg.textContent = 'Logo saved. It will appear on your PDFs.';
+}
+
+async function removeLogo() {
+  var err = await saveProfile({ logo_url: null });
+  var msg = document.getElementById('acLogoMsg');
+  if (err) { msg.style.color = 'var(--red)'; msg.textContent = err.message; return; }
+  _brandLogo = null;
+  var p = document.getElementById('acLogoPreview'); if (p) { p.removeAttribute('src'); p.style.display = 'none'; }
+  msg.style.color = 'var(--forest)'; msg.textContent = 'Logo removed.';
+}
+
+// ---------- Account & Settings screen ----------
+function _acField(id, label, placeholder, opts) {
+  opts = opts || {};
+  var tag = opts.textarea
+    ? '<textarea id="' + id + '" rows="' + (opts.rows || 5) + '" placeholder="' + _acEsc(placeholder) + '" style="width:100%;"' + (opts.disabled ? ' disabled' : '') + '></textarea>'
+    : '<input type="' + (opts.type || 'text') + '" id="' + id + '" placeholder="' + _acEsc(placeholder) + '" style="width:100%;"' + (opts.disabled ? ' disabled' : '') + (opts.readonly ? ' readonly' : '') + '>';
+  return '<div style="margin-bottom:10px;"><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">' + label + '</label>' + tag + '</div>';
+}
+
+var _acTab = 'account';
+
+async function openAccountSettings(tab) {
+  if (!_supaUser) { openAuthModal('login'); return; }
+  if (!_profile) await loadProfile();
+  try { await checkPro(true); } catch (e) {}
+  _acTab = tab || _acTab || 'account';
+  var pro = _brandIsPro();
+  var proTag = '<span style="font-size:10px;font-weight:700;color:#fff;background:var(--brass);border-radius:4px;padding:1px 5px;margin-left:6px;vertical-align:1px;">PRO</span>';
+  var tabs = [['account','Account'],['firm','Firm profile'],['docs','Documents'],['plan','Plan']];
+  var tabBar = '<div style="display:flex;gap:4px;border-bottom:1px solid var(--border);margin:0 0 16px;overflow-x:auto;">' +
+    tabs.map(function (t) {
+      var on = t[0] === _acTab;
+      return '<button type="button" data-actab="' + t[0] + '" style="border:0;background:none;padding:9px 9px;font-size:13px;cursor:pointer;white-space:nowrap;' +
+        'font-weight:' + (on ? '700' : '500') + ';color:' + (on ? 'var(--forest)' : 'var(--stone)') + ';border-bottom:2px solid ' + (on ? 'var(--forest)' : 'transparent') + ';margin-bottom:-1px;">' + t[1] + '</button>';
+    }).join('') + '</div>';
+
+  var body = '';
+  if (_acTab === 'account') {
+    body =
+      _acField('ac_email', 'Email', '', { readonly: true }) +
+      _acField('ac_full_name', 'Full name', 'Your name') +
+      _acField('ac_phone', 'Phone', '+91 98xxx xxxxx', { type: 'tel' }) +
+      '<button class="auth-btn-primary" data-acsave="account">Save</button>' +
+      '<div style="font-size:15px;font-weight:700;margin:22px 0 8px;text-transform:none;letter-spacing:0;border:0;">Change password</div>' +
+      _acField('ac_pw1', 'New password', 'Min 6 characters', { type: 'password' }) +
+      _acField('ac_pw2', 'Repeat new password', '', { type: 'password' }) +
+      '<button class="auth-btn-primary" id="acPwBtn" style="background:var(--stone);">Update password</button>' +
+      '<div id="acPwMsg" style="margin-top:8px;font-size:13px;min-height:18px;"></div>' +
+      '<p style="font-size:12.5px;color:var(--stone);margin-top:18px;">To change your login email or delete your account, write to ' +
+      '<a href="mailto:support@terracost.io?subject=' + encodeURIComponent('Account request') + '">support@terracost.io</a> from this email address.</p>';
+  } else if (_acTab === 'firm') {
+    body =
+      '<p style="font-size:13px;color:var(--stone);margin:0 0 12px;">Saved once, filled into every new BOQ. Existing BOQs keep what they already have.</p>' +
+      AC_CFG.firmFields.map(function (f) { return _acField('ac_' + f[0], f[2], f[3]); }).join('') +
+      _acField('ac_website', 'Website (optional)', 'www.yourfirm.com') +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+        '<button class="auth-btn-primary" data-acsave="firm">Save</button>' +
+        '<button class="auth-btn-primary" id="acApplyFirm" style="background:var(--stone);">Save and fill this BOQ</button>' +
+      '</div>' +
+      '<div style="font-size:15px;font-weight:700;margin:22px 0 8px;text-transform:none;letter-spacing:0;border:0;">Logo on PDFs' + proTag + '</div>' +
+      (pro
+        ? '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+            '<img id="acLogoPreview" alt="Your logo" style="display:none;max-height:48px;max-width:140px;border:1px solid var(--border);border-radius:6px;padding:4px;background:#fff;">' +
+            '<button type="button" class="auth-btn-primary" id="acLogoPick" style="width:auto;margin:0;">Upload PNG or JPG</button><input type="file" id="acLogoFile" accept="image/png,image/jpeg" style="display:none;">' +
+            (_profile && _profile.logo_url ? '<button type="button" id="acLogoRemove" style="background:none;border:0;color:var(--red);cursor:pointer;font-size:13px;">Remove</button>' : '') +
+          '</div>'
+        : '<p style="font-size:13px;color:var(--stone);margin:0;">Put your firm\u2019s logo on every PDF with Pro. <a href="#" id="acUpgrade1">See Pro</a></p>') +
+      '<div id="acLogoMsg" style="margin-top:8px;font-size:13px;min-height:18px;"></div>';
+  } else if (_acTab === 'docs') {
+    var curSel = '';
+    if (AC_CFG.currencies) {
+      curSel = '<div style="margin-bottom:10px;"><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Default currency for new BOQs</label>' +
+        '<select id="ac_default_currency" style="width:100%;"><option value="">Use the edition default</option>' +
+        AC_CFG.currencies.map(function (c) { return '<option value="' + _acEsc(c) + '">' + _acEsc(c) + '</option>'; }).join('') + '</select></div>';
+    }
+    body = curSel +
+      _acField('ac_default_terms', 'Default terms & conditions for new BOQs', 'Leave blank to keep the standard TerraCost terms', { textarea: true, rows: 7 }) +
+      '<div style="font-size:15px;font-weight:700;margin:22px 0 8px;text-transform:none;letter-spacing:0;border:0;">PDF header and footer' + proTag + '</div>' +
+      (pro ? '' : '<p style="font-size:13px;color:var(--stone);margin:0 0 10px;">With Pro, your own title replaces the standard one and the TerraCost footer is removed. <a href="#" id="acUpgrade2">See Pro</a></p>') +
+      _acField('ac_custom_header_text', 'PDF title', 'LANDSCAPE BILL OF QUANTITIES & PROPOSAL', { disabled: !pro }) +
+      _acField('ac_custom_footer_text', 'PDF footer line', 'Leave blank for no footer line', { disabled: !pro }) +
+      '<button class="auth-btn-primary" data-acsave="docs">Save</button>';
+  } else {
+    var until = (typeof _proCache !== 'undefined' && _proCache.until) ? new Date(_proCache.until) : null;
+    body = pro
+      ? '<div style="border:2px solid var(--forest);border-radius:10px;padding:16px;">' +
+          '<div style="font-weight:700;font-size:17px;">Pro' + proTag + '</div>' +
+          '<div style="color:var(--stone);font-size:13px;margin-top:4px;">Active until ' + (until ? until.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—') + '</div>' +
+        '</div>' +
+        '<p style="font-size:13px;color:var(--stone);margin-top:14px;">Billing questions or cancellations: <a href="mailto:support@terracost.io?subject=' + encodeURIComponent('Billing') + '">support@terracost.io</a>.</p>'
+      : '<div style="border:1px solid var(--border);border-radius:10px;padding:16px;">' +
+          '<div style="font-weight:700;font-size:17px;">Free</div>' +
+          '<div style="color:var(--stone);font-size:13px;margin-top:4px;">Full BOQ builder and PDF export.</div>' +
+        '</div>' +
+        '<p style="font-size:13px;margin:14px 0 10px;">Pro adds Excel exports, your logo and your own PDF header and footer.</p>' +
+        '<button class="auth-btn-primary" id="acUpgrade3">Upgrade or redeem a code</button>';
+  }
+
+  var o = _acOverlay('accountOverlay',
+    '<button onclick="document.getElementById(\'accountOverlay\').remove()" aria-label="Close" style="position:absolute;top:10px;right:14px;border:0;background:none;font-size:24px;cursor:pointer;color:var(--stone);">&times;</button>' +
+    '<h2 style="margin:0 0 12px;font-size:20px;">Account & settings</h2>' + tabBar + body +
+    '<div id="acMsg" style="margin-top:10px;font-size:13px;min-height:18px;"></div>');
+  o.onclick = function (e) { if (e.target === o) o.remove(); };
+
+  // Fill values safely (no HTML injection)
+  var em = document.getElementById('ac_email'); if (em) em.value = _supaUser.email || '';
+  PROFILE_FIELDS.forEach(function (f) { var el = document.getElementById('ac_' + f); if (el && _profile && _profile[f] != null) el.value = _profile[f]; });
+  var lp = document.getElementById('acLogoPreview'); if (lp && _brandLogo) { lp.src = _brandLogo.data; lp.style.display = ''; }
+
+  o.querySelectorAll('[data-actab]').forEach(function (b) { b.onclick = function () { openAccountSettings(b.getAttribute('data-actab')); }; });
+  o.querySelectorAll('[data-acsave]').forEach(function (b) { b.onclick = function () { _acSaveTab(); }; });
+  var af = document.getElementById('acApplyFirm');
+  if (af) af.onclick = async function () { if (await _acSaveTab()) { applyFirmProfileToBOQ(); _acMsg('Saved and filled into this BOQ.', true); } };
+  var lf = document.getElementById('acLogoFile'); if (lf) lf.onchange = function () { uploadLogo(lf.files[0]); };
+  var lpk = document.getElementById('acLogoPick'); if (lpk && lf) lpk.onclick = function () { lf.click(); };
+  var lr = document.getElementById('acLogoRemove'); if (lr) lr.onclick = removeLogo;
+  ['acUpgrade1','acUpgrade2','acUpgrade3'].forEach(function (id) {
+    var u = document.getElementById(id);
+    if (u) u.onclick = function (e) { e.preventDefault(); o.remove(); showProGate(function () { _updateProBadge(); }); };
+  });
+  var pb = document.getElementById('acPwBtn');
+  if (pb) pb.onclick = async function () {
+    var a = document.getElementById('ac_pw1').value, b2 = document.getElementById('ac_pw2').value;
+    var m = document.getElementById('acPwMsg'); m.style.color = 'var(--red)';
+    if (a.length < 6) { m.textContent = 'Password must be at least 6 characters.'; return; }
+    if (a !== b2) { m.textContent = 'The two passwords don\u2019t match.'; return; }
+    var r = await getSupabase().auth.updateUser({ password: a });
+    if (r.error) { m.textContent = r.error.message; return; }
+    document.getElementById('ac_pw1').value = ''; document.getElementById('ac_pw2').value = '';
+    m.style.color = 'var(--forest)'; m.textContent = 'Password updated.';
+  };
+}
+
+function _acMsg(text, ok) { var m = document.getElementById('acMsg'); if (!m) return; m.style.color = ok ? 'var(--forest)' : 'var(--red)'; m.textContent = text; }
+
+async function _acSaveTab() {
+  var patch = {};
+  PROFILE_FIELDS.forEach(function (f) {
+    var el = document.getElementById('ac_' + f);
+    if (el && !el.disabled) { var v = String(el.value || '').trim(); patch[f] = v || null; }
+  });
+  if (!Object.keys(patch).length) return true;
+  (AC_CFG.upperFields || []).forEach(function (f) { if (patch[f]) patch[f] = patch[f].toUpperCase(); });
+  _acMsg('Saving…', true);
+  var err = await saveProfile(patch);
+  if (err) { _acMsg('Could not save: ' + err.message, false); return false; }
+  _acMsg('Saved.', true);
+  return true;
+}
+</script>
 
 </body>
 </html>
