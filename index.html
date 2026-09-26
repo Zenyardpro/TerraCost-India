@@ -6303,6 +6303,46 @@ async function cloudDeleteProject(id, name) {
   loadProjectsList();
 }
 
+// --- WhatsApp link: app.terracost.io/?walink=<token>, sent by the TerraCost WhatsApp bot ---
+// Ties the WhatsApp number to the logged-in account so the bot can give Pro users their Excel files.
+var _waLinkBusy = false;
+function _waLinkToken() {
+  try {
+    var params = new URLSearchParams(window.location.search);
+    var t = params.get('walink');
+    if (t) {
+      sessionStorage.setItem('wa_link_pending', t);
+      params.delete('walink');
+      var q = params.toString();
+      history.replaceState(null, '', window.location.pathname + (q ? '?' + q : '') + window.location.hash);
+    }
+    return sessionStorage.getItem('wa_link_pending');
+  } catch(e) { return null; }
+}
+async function claimWaLink() {
+  var token = _waLinkToken();
+  if (!token || _waLinkBusy) return;
+  if (!_supaUser) { openAuthModal('login'); return; }   // resumes after login via onAuthStateChange
+  _waLinkBusy = true;
+  try {
+    var res = await getSupabase().rpc('claim_wa_link', { p_token: token });
+    try { sessionStorage.removeItem('wa_link_pending'); } catch(e) {}
+    if (res.error) {
+      var m = res.error.message || '';
+      alert(m.indexOf('LINK_EXPIRED') >= 0 ? 'This WhatsApp link has expired. Type "link" to the TerraCost WhatsApp bot to get a new one.'
+          : m.indexOf('LINK_USED') >= 0 ? 'This WhatsApp link was already used. Type "link" to the TerraCost WhatsApp bot to get a new one.'
+          : 'Could not link WhatsApp: ' + m);
+      return;
+    }
+    await checkPro(true); _updateProBadge();
+    alert('WhatsApp number ending ' + res.data + ' is now linked to this account.' +
+          (isUnlocked() ? '\n\nGo back to WhatsApp and tap "Get files again" for your Excel files.'
+                        : '\n\nThis account does not have Pro yet, so the WhatsApp bot will send PDFs only.'));
+  } catch(e) {
+    console.warn('WhatsApp link failed:', e);
+  } finally { _waLinkBusy = false; }
+}
+
 // --- Init auth on page load ---
 async function initSupaAuth() {
   try {
@@ -6334,6 +6374,7 @@ async function initSupaAuth() {
 
     updateAuthUI();
     if (_supaUser) { seedRateMemFromCloud(); checkPro(true).then(_updateProBadge); }
+    claimWaLink();
 
     // Listen for auth state changes
     sb.auth.onAuthStateChange(function(event, session) {
@@ -6346,6 +6387,7 @@ async function initSupaAuth() {
       _supaUser = newUser;
       updateAuthUI();
       checkPro(true).then(_updateProBadge); if (newUser) seedRateMemFromCloud();
+      if (newUser) claimWaLink();
     });
   } catch(e) {
     console.warn('Supabase auth init error:', e);
