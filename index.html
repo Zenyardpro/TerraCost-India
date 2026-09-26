@@ -24,6 +24,7 @@
     libs.forEach(function(src) {
       var s = document.createElement('script');
       s.src = src;
+      s.async = false;   // run in list order: the autotable plugin must run after jsPDF, or doc.autoTable is missing
       s.onload = function() { if (++loaded === libs.length) { _exportLibsLoaded = true; _exportLibsLoading = false; callback(); } };
       s.onerror = function() {
         console.error('Failed to load:', src);
